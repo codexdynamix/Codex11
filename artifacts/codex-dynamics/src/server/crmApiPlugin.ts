@@ -952,28 +952,37 @@ export function crmApiPlugin(): Plugin {
         }
 
         // -------------------------------------------------------------
-        // /api/admin/notifications/sent-log
+        // /api/admin/notifications/sent-log & /api/client/notifications
         // -------------------------------------------------------------
-        if (pathname === '/api/admin/notifications/sent-log') {
+        if (pathname === '/api/admin/notifications/sent-log' || pathname === '/api/client/notifications' || pathname === '/api/portal/notifications') {
           if (method === 'DELETE') {
             store.notifications = [];
             saveStore(store);
             return sendJson({ ok: true });
           }
+          const targetUserId = parsedUrl.searchParams.get('user_id') || parsedUrl.searchParams.get('userId');
+          let notifs = store.notifications || [];
+          if (targetUserId) {
+            notifs = notifs.filter((n: NotificationItem) => !n.user_id || n.user_id === targetUserId);
+          }
           return sendJson({
             ok: true,
-            log: store.notifications || [],
-            total: store.notifications.length,
+            notifications: notifs,
+            log: notifs,
+            total: notifs.length,
           });
         }
 
         // -------------------------------------------------------------
-        // /api/admin/messages: Support chat between Admin & Client
+        // /api/admin/messages & /api/client/messages: Support chat
         // -------------------------------------------------------------
-        if (pathname === '/api/admin/messages') {
+        if (pathname === '/api/admin/messages' || pathname === '/api/client/messages') {
           if (method === 'POST') {
             const userId = (body.user_id || body.userId || '').trim();
             const text = (body.body || body.text || '').trim();
+            const sender = body.sender === 'client' ? 'client' : 'agent';
+            const senderName = body.sender_name || (sender === 'client' ? 'Client' : 'Support Agent');
+
             if (!userId || !text) {
               return sendJson({ ok: false, error: 'user_id and message body required' }, 400);
             }
@@ -982,8 +991,8 @@ export function crmApiPlugin(): Plugin {
             const newMsg: MessageItem = {
               id: 'msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
               user_id: userId,
-              sender: 'agent',
-              sender_name: 'Support Agent',
+              sender,
+              sender_name: senderName,
               body: text,
               is_read: false,
               created_at: now,
@@ -995,8 +1004,10 @@ export function crmApiPlugin(): Plugin {
             store.auditLogs.unshift({
               id: 'aud_' + Date.now(),
               user_id: userId,
-              action: 'SUPPORT_MESSAGE_SENT',
-              details: `Agent sent message: "${text.slice(0, 60)}"`,
+              action: sender === 'client' ? 'SUPPORT_MESSAGE_RECEIVED' : 'SUPPORT_MESSAGE_SENT',
+              details: sender === 'client'
+                ? `Client sent message: "${text.slice(0, 60)}"`
+                : `Agent sent message: "${text.slice(0, 60)}"`,
               ip_address: '127.0.0.1',
               created_at: now,
             });

@@ -15,6 +15,29 @@ export function PortalNotifications({ client, onNavigate }: PortalNotificationsP
       setNotifications(portalDb.getNotifications(client.id));
     };
 
+    // Initial server fetch to sync any notifications sent via API backend
+    fetch(`/api/client/notifications?user_id=${encodeURIComponent(client.id)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.ok && Array.isArray(data.notifications) && data.notifications.length > 0) {
+          const currentLocal = portalDb.getNotifications(client.id);
+          const currentTitles = new Set(currentLocal.map((n) => `${n.title}_${n.description}`));
+          for (const item of data.notifications) {
+            const key = `${item.title}_${item.description}`;
+            if (!currentTitles.has(key)) {
+              portalDb.addNotification(item.user_id || client.id, {
+                title: item.title,
+                description: item.description,
+                kind: item.kind,
+                link: item.link,
+              });
+            }
+          }
+          setNotifications(portalDb.getNotifications(client.id));
+        }
+      })
+      .catch(() => {});
+
     window.addEventListener('cdx_portal_notification_added', handleUpdate);
     window.addEventListener('storage', handleUpdate);
     return () => {

@@ -1247,6 +1247,11 @@ export const portalDb = {
     ticket.status = ticket.status === 'Resolved' || ticket.status === 'Closed' ? 'Open' : ticket.status;
     saveDatabase(db);
     this.logAudit(clientId, client?.name || 'Client', 'TICKET_REPLIED', `Sent reply on ticket ${ticket.ticketNumber}`);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('cdx_chat_message_received', { detail: { clientId, message: newMsg } }));
+    }
+
     return newMsg;
   },
 
@@ -1270,7 +1275,7 @@ export const portalDb = {
   getNotifications(clientId: string): ClientNotification[] {
     const db = loadDatabase();
     return db.notifications
-      .filter((n) => n.clientId === clientId)
+      .filter((n) => !n.clientId || n.clientId === clientId)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   },
 
@@ -1366,9 +1371,9 @@ export const portalDb = {
 
   getDirectChatMessages(clientId: string): SupportMessage[] {
     const db = loadDatabase();
-    const ticket = db.tickets.find((t) => t.clientId === clientId);
+    const ticket = (db.supportTickets || []).find((t) => t.clientId === clientId);
     if (!ticket) return [];
-    return ticket.messages.map((m) => ({
+    return (ticket.messages || []).map((m) => ({
       ...m,
       sender: m.sender,
     }));
@@ -1376,12 +1381,13 @@ export const portalDb = {
 
   sendDirectChatMessage(clientId: string, text: string, sender: 'client' | 'staff' = 'client', senderName?: string): SupportMessage {
     const db = loadDatabase();
-    let ticket = db.tickets.find((t) => t.clientId === clientId);
+    if (!db.supportTickets) db.supportTickets = [];
+    let ticket = db.supportTickets.find((t) => t.clientId === clientId);
     const client = db.clients.find((c) => c.id === clientId);
 
     if (!ticket) {
       ticket = {
-        id: `tkt_${Date.now()}`,
+        id: `tick_${Date.now()}`,
         clientId,
         ticketNumber: `CDX-${Math.floor(1000 + Math.random() * 9000)}`,
         subject: 'Dedicated Support Channel',
@@ -1393,7 +1399,7 @@ export const portalDb = {
         updatedAt: new Date().toISOString(),
         messages: [],
       };
-      db.tickets.unshift(ticket);
+      db.supportTickets.unshift(ticket);
     }
 
     const msg: SupportMessage = {
@@ -1404,6 +1410,7 @@ export const portalDb = {
       createdAt: new Date().toISOString(),
     };
 
+    if (!ticket.messages) ticket.messages = [];
     ticket.messages.push(msg);
     ticket.updatedAt = new Date().toISOString();
     ticket.status = 'Open';

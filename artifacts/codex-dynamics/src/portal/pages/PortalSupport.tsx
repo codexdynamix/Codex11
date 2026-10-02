@@ -44,6 +44,21 @@ export function PortalSupport({ client }: PortalSupportProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [selectedTicket?.messages?.length, selectedTicketId]);
 
+  // Real-time synchronization with Admin CRM support chat
+  useEffect(() => {
+    const handleSync = (e: any) => {
+      if (!e.detail?.clientId || e.detail.clientId === client.id) {
+        setTickets(portalDb.getSupportTickets(client.id));
+      }
+    };
+    window.addEventListener('cdx_chat_message_received', handleSync);
+    window.addEventListener('storage', handleSync);
+    return () => {
+      window.removeEventListener('cdx_chat_message_received', handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
+  }, [client.id]);
+
   const filteredTickets = tickets.filter((t) => {
     const matchesSearch =
       t.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -61,12 +76,25 @@ export function PortalSupport({ client }: PortalSupportProps) {
 
   const handleSendReply = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedTicket || !replyText.trim()) return;
+    const text = replyText.trim();
+    if (!selectedTicket || !text) return;
 
-    portalDb.addSupportTicketReply(client.id, selectedTicket.id, replyText.trim());
+    portalDb.addSupportTicketReply(client.id, selectedTicket.id, text);
     setReplyText('');
     const updated = portalDb.getSupportTickets(client.id);
     setTickets(updated);
+
+    // Sync to backend messages endpoint
+    fetch('/api/admin/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: client.id,
+        body: text,
+        sender: 'client',
+        sender_name: client.name || 'Client',
+      }),
+    }).catch(() => {});
   };
 
   const handleCreateTicket = (e: React.FormEvent) => {

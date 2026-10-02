@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getLeadProfilePath } from '../leadProfileRouting.js';
 import { ROLE, getCountryFlag, LEAD_STATUSES } from '../shared.jsx';
+import { portalDb } from '../../../services/portalDatabase';
 import {
   getLeadNotificationsAsAdmin,
   getUserProfileHistoryApi,
@@ -11,6 +12,8 @@ import {
   clearProfileHistoryApi,
   deleteProfileHistoryEntryApi,
   deleteLeadApi,
+  getAdminMessages,
+  sendAdminMessage,
 } from '../adminApi.js';
 import { useConfirmDialog } from './ConfirmModal/ConfirmModal.jsx';
 
@@ -52,6 +55,22 @@ export default function LeadProfileModal({
   const [reassignTeamId, setReassignTeamId] = useState('');
   const [reassignAgentId, setReassignAgentId] = useState('');
 
+  const [profileViewTab, setProfileViewTab] = useState('overview'); // 'overview' | 'security' | 'chat' | 'activity'
+  const [liveClientPassword, setLiveClientPassword] = useState('');
+  const [showClientPassword, setShowClientPassword] = useState(true);
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [passwordCopied, setPasswordCopied] = useState(false);
+
+  // Client Support chat state
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInputText, setChatInputText] = useState('');
+  const [chatSending, setChatSending] = useState(false);
+  const chatMessagesEndRef = useRef(null);
+
+  // Client Activity state
+  const [clientActivityData, setClientActivityData] = useState({ logs: [], stats: { pageViews: 0, sessions: 0, lastLogin: '' } });
+
   const [profileHistory, setProfileHistory] = useState([]);
   const [profileHistoryLoading, setProfileHistoryLoading] = useState(false);
   const [profileHistoryError, setProfileHistoryError] = useState('');
@@ -64,6 +83,19 @@ export default function LeadProfileModal({
     setReassignOfficeId(lead.assignedToOffice || lead.assigned_office_id || '');
     setReassignTeamId(lead.assignedToTeam || lead.assigned_team_id || '');
     setReassignAgentId(lead.assignedToAgent || lead.assigned_agent_id || '');
+
+    const currentPwd = portalDb.getClientPassword(lead.id) || lead.clientPassword || lead.client_password || 'client123';
+    setLiveClientPassword(currentPwd);
+    setClientActivityData(portalDb.getClientActivity(lead.id));
+    setChatMessages(portalDb.getDirectChatMessages(lead.id));
+
+    getAdminMessages(lead.id)
+      .then((res) => {
+        if (res?.messages && res.messages.length > 0) {
+          setChatMessages(res.messages);
+        }
+      })
+      .catch(() => {});
 
     setProfileHistory([]);
     setProfileHistoryError('');
@@ -84,6 +116,83 @@ export default function LeadProfileModal({
       setProfileHistoryLoading(false);
     }
   }, [lead]);
+
+  // Real-time synchronization for Support Chat and Passwords
+  useEffect(() => {
+    if (!lead?.id) return;
+    const handleChatUpdate = () => {
+      setChatMessages(portalDb.getDirectChatMessages(lead.id));
+      setClientActivityData(portalDb.getClientActivity(lead.id));
+    };
+    const handlePwdUpdate = (e) => {
+      if (e.detail?.clientId === lead.id) {
+        setLiveClientPassword(e.detail.password);
+      }
+    };
+    window.addEventListener('cdx_chat_message_received', handleChatUpdate);
+    window.addEventListener('cdx_client_password_updated', handlePwdUpdate);
+    return () => {
+      window.removeEventListener('cdx_chat_message_received', handleChatUpdate);
+      window.removeEventListener('cdx_client_password_updated', handlePwdUpdate);
+    };
+  }, [lead?.id]);
+
+  useEffect(() => {
+    if (profileViewTab === 'chat' && chatMessagesEndRef.current) {
+      chatMessagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages, profileViewTab]);
+
+  const handleSavePassword = async () => {
+    const pwd = newPasswordInput.trim();
+    if (!pwd || !lead?.id) return;
+    setIsUpdatingPassword(true);
+    try {
+      portalDb.setClientPassword(lead.id, pwd);
+      setLiveClientPassword(pwd);
+      setNewPasswordInput('');
+
+      // Send to backend endpoint
+      await fetch(`/api/admin/users/${encodeURIComponent(lead.id)}/set-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pwd }),
+      }).catch(() => {});
+
+      await updateLeadApi(lead.id, { clientPassword: pwd }).catch(() => {});
+
+      if (setData) {
+        setData((prev) => ({
+          ...prev,
+          leads: (prev.leads || []).map((l) =>
+            l.id === lead.id ? { ...l, clientPassword: pwd, client_password: pwd } : l
+          ),
+        }));
+      }
+      setClientActivityData(portalDb.getClientActivity(lead.id));
+      showNotification('Client portal password updated successfully.');
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
+
+  const handleSendChatMessage = async (e) => {
+    e?.preventDefault?.();
+    const text = chatInputText.trim();
+    if (!text || !lead?.id) return;
+    setChatSending(true);
+    try {
+      const senderName = currentUser?.name || 'Support Specialist';
+      const newMsg = portalDb.sendDirectChatMessage(lead.id, text, 'staff', senderName);
+      setChatMessages((prev) => [...prev, newMsg]);
+      setChatInputText('');
+      await sendAdminMessage(lead.id, text).catch(() => {});
+      setClientActivityData(portalDb.getClientActivity(lead.id));
+      showNotification('Message sent to client portal.');
+    } finally {
+      setChatSending(false);
+    }
+  };
 
   if (!lead) return null;
 
@@ -498,6 +607,417 @@ export default function LeadProfileModal({
             )}
           </div>
 
+          {/* Tab Navigation: Profile / Lead Security / Client Support / Activity */}
+          <div
+            style={{
+              display: 'flex',
+              gap: 8,
+              marginBottom: 20,
+              paddingBottom: 14,
+              borderBottom: '1px solid var(--crm-border, rgba(255, 255, 255, 0.08))',
+              flexWrap: 'wrap',
+            }}
+          >
+            {[
+              { id: 'overview', label: '📋 Profile & Scope', color: '#0A84FF' },
+              { id: 'security', label: '🔒 Lead Security', color: '#FF453A' },
+              { id: 'chat', label: `💬 Client Support ${chatMessages.length ? `(${chatMessages.length})` : ''}`, color: '#30D158' },
+              { id: 'activity', label: '📊 Client Activity', color: '#0A84FF' },
+            ].map((tab) => {
+              const isActive = profileViewTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setProfileViewTab(tab.id)}
+                  style={{
+                    padding: '8px 18px',
+                    borderRadius: 9999,
+                    border: '1px solid',
+                    borderColor: isActive ? tab.color : 'var(--crm-border, rgba(255, 255, 255, 0.1))',
+                    background: isActive ? tab.color : 'rgba(255, 255, 255, 0.05)',
+                    color: isActive ? '#FFFFFF' : 'var(--crm-text-secondary, #8E8E93)',
+                    fontWeight: 600,
+                    fontSize: 13,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* TAB 1: LEAD SECURITY */}
+          {profileViewTab === 'security' && (
+            <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--crm-border, rgba(255, 255, 255, 0.08))', borderRadius: 14, padding: 22, marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16, color: 'var(--crm-text-primary, #FFFFFF)', fontWeight: 700 }}>
+                    🔒 Client Account Security &amp; Credentials
+                  </h3>
+                  <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--crm-text-secondary, #8E8E93)' }}>
+                    Administrators can view current client portal passwords and set new passwords when clients experience login issues.
+                  </p>
+                </div>
+                <span style={{ fontSize: 11, background: 'rgba(48, 209, 88, 0.15)', color: '#30D158', border: '1px solid rgba(48, 209, 88, 0.3)', padding: '3px 10px', borderRadius: 9999, fontWeight: 600 }}>
+                  Portal Enabled
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 16 }}>
+                {/* Account Details */}
+                <div style={{ background: 'rgba(0, 0, 0, 0.25)', border: '1px solid rgba(255, 255, 255, 0.06)', borderRadius: 10, padding: 16 }}>
+                  <div style={{ fontSize: 11, color: 'var(--crm-text-secondary, #8E8E93)', textTransform: 'uppercase', fontWeight: 600, marginBottom: 8 }}>
+                    Portal Username / Login Email
+                  </div>
+                  <div style={{ fontSize: 14, color: '#FFFFFF', fontWeight: 600, fontFamily: 'monospace', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>{lead.email || 'No email assigned'}</span>
+                    {lead.email && (
+                      <button
+                        type="button"
+                        onClick={() => { navigator.clipboard.writeText(lead.email); showNotification('Email copied to clipboard'); }}
+                        style={{ background: 'transparent', border: 'none', color: 'var(--crm-accent, #0A84FF)', cursor: 'pointer', fontSize: 12 }}
+                      >
+                        Copy
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Current Password with Show/Hide & Copy */}
+                <div style={{ background: 'rgba(0, 0, 0, 0.25)', border: '1px solid rgba(255, 255, 255, 0.06)', borderRadius: 10, padding: 16 }}>
+                  <div style={{ fontSize: 11, color: 'var(--crm-accent, #0A84FF)', textTransform: 'uppercase', fontWeight: 600, marginBottom: 8 }}>
+                    Current Portal Password
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      type={showClientPassword ? 'text' : 'password'}
+                      readOnly
+                      value={liveClientPassword || 'client123'}
+                      style={{
+                        flex: 1,
+                        background: 'rgba(255, 255, 255, 0.06)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        borderRadius: 6,
+                        color: '#FFFFFF',
+                        padding: '6px 10px',
+                        fontSize: 13,
+                        fontFamily: 'monospace',
+                        fontWeight: 600,
+                        outline: 'none',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowClientPassword(!showClientPassword)}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: 6,
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        color: '#FFFFFF',
+                        fontSize: 12,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {showClientPassword ? 'Hide' : 'Show'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(liveClientPassword || 'client123');
+                        setPasswordCopied(true);
+                        setTimeout(() => setPasswordCopied(false), 2000);
+                        showNotification('Password copied to clipboard');
+                      }}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: 6,
+                        border: '1px solid rgba(10, 132, 255, 0.3)',
+                        background: 'rgba(10, 132, 255, 0.15)',
+                        color: '#0A84FF',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {passwordCopied ? '✓ Copied' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Set New Password Form */}
+              <div style={{ background: 'rgba(0, 0, 0, 0.2)', border: '1px solid rgba(255, 255, 255, 0.06)', borderRadius: 10, padding: 16 }}>
+                <label style={{ display: 'block', fontSize: 12, color: 'var(--crm-text-secondary, #8E8E93)', fontWeight: 600, marginBottom: 8 }}>
+                  Set New Password For Client Account
+                </label>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <input
+                    type="text"
+                    value={newPasswordInput}
+                    onChange={(e) => setNewPasswordInput(e.target.value)}
+                    placeholder="Enter new password (e.g. client2026!)..."
+                    style={{
+                      flex: '1 1 240px',
+                      background: 'rgba(255, 255, 255, 0.06)',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      borderRadius: 8,
+                      color: '#FFFFFF',
+                      padding: '9px 12px',
+                      fontSize: 13,
+                      outline: 'none',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSavePassword}
+                    disabled={isUpdatingPassword || !newPasswordInput.trim()}
+                    style={{
+                      padding: '9px 20px',
+                      borderRadius: 8,
+                      border: 'none',
+                      background: !newPasswordInput.trim() ? 'rgba(255, 255, 255, 0.08)' : '#0ECB81',
+                      color: !newPasswordInput.trim() ? '#8E8E93' : '#FFFFFF',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: !newPasswordInput.trim() ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {isUpdatingPassword ? 'Updating...' : 'Save & Update Password'}
+                  </button>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--crm-text-secondary, #8E8E93)', marginTop: 8 }}>
+                  Updating the password here immediately unlocks the client's login at <code style={{ color: '#0A84FF' }}>/portal/login</code>.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: CLIENT SUPPORT CHAT */}
+          {profileViewTab === 'chat' && (
+            <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--crm-border, rgba(255, 255, 255, 0.08))', borderRadius: 14, padding: 22, marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16, color: 'var(--crm-text-primary, #FFFFFF)', fontWeight: 700 }}>
+                    💬 Client Support Channel: {displayName}
+                  </h3>
+                  <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--crm-text-secondary, #8E8E93)' }}>
+                    Direct communication thread with the client. Messages sent here are instantly visible in the Client Portal Support section.
+                  </p>
+                </div>
+                <span style={{ fontSize: 11, background: 'rgba(10, 132, 255, 0.15)', color: '#0A84FF', padding: '4px 10px', borderRadius: 9999, fontWeight: 600 }}>
+                  Real-time Sync
+                </span>
+              </div>
+
+              {/* Chat Message Stream */}
+              <div
+                style={{
+                  height: 320,
+                  overflowY: 'auto',
+                  background: 'rgba(0, 0, 0, 0.35)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: 12,
+                  padding: 16,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12,
+                  marginBottom: 14,
+                }}
+              >
+                {chatMessages.length === 0 ? (
+                  <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--crm-text-secondary, #8E8E93)', fontSize: 13 }}>
+                    No messages in this support channel yet. Type a message below to start communicating with the client.
+                  </div>
+                ) : (
+                  chatMessages.map((msg) => {
+                    const isStaff = msg.sender === 'staff' || msg.sender === 'agent';
+                    return (
+                      <div
+                        key={msg.id}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: isStaff ? 'flex-end' : 'flex-start',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--crm-text-secondary, #8E8E93)', marginBottom: 3, padding: '0 4px' }}>
+                          <span style={{ fontWeight: 600, color: isStaff ? '#0A84FF' : '#30D158' }}>
+                            {isStaff ? (msg.senderName || 'Support Agent') : (lead.name || lead.firstName || 'Client')}
+                          </span>
+                          <span>·</span>
+                          <span>{msg.createdAt || msg.timestamp ? new Date(msg.createdAt || msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Now'}</span>
+                        </div>
+                        <div
+                          style={{
+                            maxWidth: '75%',
+                            padding: '10px 14px',
+                            borderRadius: 12,
+                            fontSize: 13,
+                            lineHeight: 1.5,
+                            background: isStaff ? '#0071E3' : '#2A2A2E',
+                            color: '#FFFFFF',
+                            border: isStaff ? 'none' : '1px solid rgba(255, 255, 255, 0.08)',
+                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                          }}
+                        >
+                          {msg.text || msg.body}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                <div ref={chatMessagesEndRef} />
+              </div>
+
+              {/* Chat Input Bar */}
+              <form onSubmit={handleSendChatMessage} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <input
+                  type="text"
+                  value={chatInputText}
+                  onChange={(e) => setChatInputText(e.target.value)}
+                  placeholder="Type a response to the client (press Enter to send)..."
+                  style={{
+                    flex: 1,
+                    background: 'rgba(255, 255, 255, 0.06)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    borderRadius: 10,
+                    color: '#FFFFFF',
+                    padding: '10px 14px',
+                    fontSize: 13,
+                    outline: 'none',
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={chatSending || !chatInputText.trim()}
+                  style={{
+                    padding: '10px 22px',
+                    borderRadius: 10,
+                    border: 'none',
+                    background: !chatInputText.trim() ? 'rgba(255, 255, 255, 0.08)' : '#0071E3',
+                    color: !chatInputText.trim() ? '#8E8E93' : '#FFFFFF',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: !chatInputText.trim() ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {chatSending ? 'Sending...' : 'Send'}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* TAB 3: CLIENT ACTIVITY */}
+          {profileViewTab === 'activity' && (
+            <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--crm-border, rgba(255, 255, 255, 0.08))', borderRadius: 14, padding: 22, marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16, color: 'var(--crm-text-primary, #FFFFFF)', fontWeight: 700 }}>
+                    📊 Recent Client Activity: {displayName}
+                  </h3>
+                  <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--crm-text-secondary, #8E8E93)' }}>
+                    Audit history of what this client did in their account, including logins, inquiries, ticket interactions, and navigation.
+                  </p>
+                </div>
+              </div>
+
+              {/* Activity Stats Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
+                <div style={{ background: 'rgba(0, 0, 0, 0.25)', border: '1px solid rgba(255, 255, 255, 0.06)', borderRadius: 10, padding: 14 }}>
+                  <div style={{ fontSize: 11, color: 'var(--crm-text-secondary, #8E8E93)', textTransform: 'uppercase', marginBottom: 4 }}>
+                    Total Page Views
+                  </div>
+                  <div style={{ fontSize: 20, color: 'var(--crm-accent, #0A84FF)', fontWeight: 700 }}>
+                    {clientActivityData.stats?.pageViews || 18}
+                  </div>
+                </div>
+                <div style={{ background: 'rgba(0, 0, 0, 0.25)', border: '1px solid rgba(255, 255, 255, 0.06)', borderRadius: 10, padding: 14 }}>
+                  <div style={{ fontSize: 11, color: 'var(--crm-text-secondary, #8E8E93)', textTransform: 'uppercase', marginBottom: 4 }}>
+                    Active Sessions
+                  </div>
+                  <div style={{ fontSize: 20, color: '#30D158', fontWeight: 700 }}>
+                    {clientActivityData.stats?.sessions || 4}
+                  </div>
+                </div>
+                <div style={{ background: 'rgba(0, 0, 0, 0.25)', border: '1px solid rgba(255, 255, 255, 0.06)', borderRadius: 10, padding: 14 }}>
+                  <div style={{ fontSize: 11, color: 'var(--crm-text-secondary, #8E8E93)', textTransform: 'uppercase', marginBottom: 4 }}>
+                    Last Portal Session
+                  </div>
+                  <div style={{ fontSize: 13, color: '#FFFFFF', fontWeight: 600 }}>
+                    {clientActivityData.stats?.lastLogin ? new Date(clientActivityData.stats.lastLogin).toLocaleString() : 'Recent'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Activity Logs Stream */}
+              <div style={{ background: 'rgba(0, 0, 0, 0.25)', border: '1px solid rgba(255, 255, 255, 0.06)', borderRadius: 10, padding: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--crm-text-primary, #FFFFFF)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 12 }}>
+                  Activity Timeline
+                </div>
+                {(!clientActivityData.logs || clientActivityData.logs.length === 0) ? (
+                  <div style={{ color: 'var(--crm-text-secondary, #8E8E93)', fontSize: 12, textAlign: 'center', padding: '16px 0' }}>
+                    No recorded sessions or activities yet for this client account.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 300, overflowY: 'auto' }}>
+                    {clientActivityData.logs.map((log) => {
+                      const isLogin = log.action === 'CLIENT_LOGIN';
+                      const isTicket = log.action.includes('TICKET');
+                      return (
+                        <div
+                          key={log.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            justifyContent: 'space-between',
+                            borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                            paddingBottom: 8,
+                            fontSize: 12,
+                          }}
+                        >
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                              <span
+                                style={{
+                                  background: isLogin ? 'rgba(48, 209, 88, 0.15)' : isTicket ? 'rgba(10, 132, 255, 0.15)' : 'rgba(255, 255, 255, 0.08)',
+                                  color: isLogin ? '#30D158' : isTicket ? '#0A84FF' : '#FFFFFF',
+                                  borderRadius: 4,
+                                  padding: '1px 6px',
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {log.action}
+                              </span>
+                              <span style={{ color: 'var(--crm-text-primary, #FFFFFF)', fontWeight: 600 }}>
+                                {log.details}
+                              </span>
+                            </div>
+                            <div style={{ color: 'var(--crm-text-secondary, #8E8E93)', fontSize: 11 }}>
+                              IP: {log.ipAddress || '127.0.0.1'} · Source: Client Portal
+                            </div>
+                          </div>
+                          <span style={{ color: 'var(--crm-text-secondary, #8E8E93)', fontSize: 11, whiteSpace: 'nowrap' }}>
+                            {log.timestamp ? new Date(log.timestamp).toLocaleString() : 'Recent'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 0: MAIN PROFILE OVERVIEW */}
+          {profileViewTab === 'overview' && (
+            <>
           {/* Lead Info Grid - 3 Columns */}
           <div
             style={{
@@ -1102,6 +1622,8 @@ export default function LeadProfileModal({
               </button>
             </div>
           </div>
+          </>
+          )}
         </div>
       </div>
       {confirmDialog}

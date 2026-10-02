@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import Notifications from './Notifications/Notifications.jsx';
-import SecurityRequests from './SecurityRequests/SecurityRequests.jsx';
 import SiteCrmWorkspace from './SiteCrmWorkspace.jsx';
 import { DataContext, NotificationContext } from '../shared';
 import { getStaffCapabilities } from '../adminApi';
@@ -9,9 +8,9 @@ const ContentTool = (props) => <SiteCrmWorkspace {...props} defaultTab="content"
 const EnquiriesTool = (props) => <SiteCrmWorkspace {...props} defaultTab="enquiries" standalone />;
 const ChatTool = (props) => <SiteCrmWorkspace {...props} defaultTab="chat" standalone />;
 
+// Security section in header is removed because Lead Security is directly managed in the client profile
 const TOOLS = [
   ['notifications', 'Notifications', Notifications],
-  ['security', 'Security', SecurityRequests],
   ['content', 'Content', ContentTool],
   ['enquiries', 'Enquiries', EnquiriesTool],
   ['chat', 'Chat', ChatTool],
@@ -19,7 +18,6 @@ const TOOLS = [
 
 const DEFAULT_CAPABILITIES = {
   notifications: true,
-  security: true,
   content: true,
   enquiries: true,
   chat: true,
@@ -95,7 +93,7 @@ export default function ReactCapabilityWorkspace({
   if (!visibleTools.length) return null;
   const Component = current?.[2];
   const scopedClients = data?.leads || [];
-  const props = ['security', 'content', 'enquiries', 'chat'].includes(current?.[0])
+  const props = ['content', 'enquiries', 'chat'].includes(current?.[0])
     ? { showNotification, leads: scopedClients }
     : {};
 

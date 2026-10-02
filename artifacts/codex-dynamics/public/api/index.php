@@ -242,22 +242,32 @@ if ($apiPath === '/admin/notifications/send') {
     jsonResponse(['ok' => true, 'id' => $id, 'sent' => 1]);
 }
 
-if ($apiPath === '/admin/notifications/sent-log') {
+if ($apiPath === '/admin/notifications/sent-log' || $apiPath === '/client/notifications' || $apiPath === '/portal/notifications') {
     if ($method === 'DELETE') {
         $pdo->exec("DELETE FROM notifications");
         jsonResponse(['ok' => true]);
     }
-    $logs = $pdo->query("SELECT * FROM notifications ORDER BY created_at DESC LIMIT 100")->fetchAll();
-    jsonResponse(['ok' => true, 'log' => $logs, 'total' => count($logs)]);
+    $userId = $_GET['user_id'] ?? $_GET['userId'] ?? null;
+    if ($userId) {
+        $stmt = $pdo->prepare("SELECT * FROM notifications WHERE user_id = ? OR user_id IS NULL OR user_id = '' ORDER BY created_at DESC LIMIT 100");
+        $stmt->execute([$userId]);
+        $logs = $stmt->fetchAll();
+    } else {
+        $logs = $pdo->query("SELECT * FROM notifications ORDER BY created_at DESC LIMIT 100")->fetchAll();
+    }
+    jsonResponse(['ok' => true, 'notifications' => $logs, 'log' => $logs, 'total' => count($logs)]);
 }
 
 // -----------------------------------------------------------------------------
 // 7. ADMIN <-> CLIENT SUPPORT CHAT
 // -----------------------------------------------------------------------------
-if ($apiPath === '/admin/messages') {
+if ($apiPath === '/admin/messages' || $apiPath === '/client/messages') {
     if ($method === 'POST') {
-        $userId = trim($input['user_id'] ?? '');
+        $userId = trim($input['user_id'] ?? $input['userId'] ?? '');
         $body = trim($input['body'] ?? $input['text'] ?? '');
+        $sender = ($input['sender'] ?? '') === 'client' ? 'client' : 'agent';
+        $senderName = $input['sender_name'] ?? ($sender === 'client' ? 'Client' : 'Support Agent');
+
         if (!$userId || !$body) {
             jsonResponse(['ok' => false, 'error' => 'user_id and body required'], 400);
         }
@@ -266,16 +276,23 @@ if ($apiPath === '/admin/messages') {
         $now = date('c');
         $stmt = $pdo->prepare("
             INSERT INTO messages (id, user_id, sender, sender_name, body, is_read, created_at)
-            VALUES (?, ?, 'agent', 'Support Agent', ?, 0, ?)
+            VALUES (?, ?, ?, ?, ?, 0, ?)
         ");
-        $stmt->execute([$msgId, $userId, $body, $now]);
+        $stmt->execute([$msgId, $userId, $sender, $senderName, $body, $now]);
+
+        // Record audit activity
+        $action = $sender === 'client' ? 'SUPPORT_MESSAGE_RECEIVED' : 'SUPPORT_MESSAGE_SENT';
+        $details = $sender === 'client' ? "Client sent message: \"{$body}\"" : "Agent sent message: \"{$body}\"";
+        $pdo->prepare("INSERT INTO audit_logs (id, user_id, action, details, created_at) VALUES (?, ?, ?, ?, ?)")
+            ->execute(['aud_' . time(), $userId, $action, substr($details, 0, 160), $now]);
 
         jsonResponse([
             'ok' => true,
             'message' => [
                 'id' => $msgId,
                 'user_id' => $userId,
-                'sender' => 'agent',
+                'sender' => $sender,
+                'sender_name' => $senderName,
                 'body' => $body,
                 'created_at' => $now,
             ]
