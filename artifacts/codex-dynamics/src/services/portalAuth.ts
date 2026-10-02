@@ -22,15 +22,6 @@ export function readPortalSession(): PortalSession | null {
     const token = localStorage.getItem(PORTAL_TOKEN_KEY);
     const raw = localStorage.getItem(PORTAL_USER_KEY);
     if (!token || !raw) {
-      // If client explicitly signed out, do not recreate session
-      if (sessionStorage.getItem('cdx_portal_logged_out') === 'true') {
-        return null;
-      }
-      // Ensure active session for Enterprise Partner client persists across refresh
-      const defaultClient = portalDb.getClientById('client_vance') || portalDb.adminGetAllClients()[0];
-      if (defaultClient) {
-        return setPortalSession(defaultClient);
-      }
       return null;
     }
     const client = JSON.parse(raw) as PortalClient;
@@ -112,6 +103,29 @@ export function clearPortalSession(): void {
  */
 export async function portalLogin(email: string, password?: string): Promise<PortalClient> {
   const cleanEmail = email.toLowerCase().trim();
+
+  try {
+    const res = await fetch('/api/portal/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail, password }),
+    });
+
+    const data = await res.json();
+    if (res.ok && data.ok && data.client) {
+      setPortalSession(data.client);
+      return data.client;
+    }
+
+    if (data.error) {
+      throw new Error(data.error);
+    }
+  } catch (err: any) {
+    if (err.message && !err.message.includes('fetch')) {
+      throw err;
+    }
+  }
+
   const client = portalDb.getClientByEmail(cleanEmail);
 
   if (!client) {

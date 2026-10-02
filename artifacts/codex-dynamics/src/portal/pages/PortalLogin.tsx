@@ -145,9 +145,9 @@ export function PortalLogin({ onLoginSuccess }: PortalLoginProps) {
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-[#1D1D1F] dark:text-white group-hover:text-[#0071E3] transition-colors">
-                    Vance Technology Group
+                    Vance Tech Capital
                   </div>
-                  <div className="text-[10px] text-[#86868B]">Eleanor Vance (Active Websites &amp; Milestones)</div>
+                  <div className="text-[10px] text-[#86868B]">eleanor.vance@vancetech.io (Password: client123)</div>
                 </div>
               </div>
               <span className="text-[10px] font-semibold text-[#0071E3] opacity-0 group-hover:opacity-100 transition-opacity">
@@ -157,7 +157,7 @@ export function PortalLogin({ onLoginSuccess }: PortalLoginProps) {
 
             <button
               type="button"
-              onClick={() => handleQuickLogin('marcus.brody@brodyandco.com', 'client123')}
+              onClick={() => handleQuickLogin('marcus@brodydesign.co', 'client123')}
               className="w-full p-2.5 rounded-xl bg-black/[0.03] dark:bg-white/[0.05] hover:bg-black/[0.06] dark:hover:bg-white/[0.09] text-left transition-colors flex items-center justify-between group"
             >
               <div className="flex items-center gap-2.5">
@@ -166,9 +166,30 @@ export function PortalLogin({ onLoginSuccess }: PortalLoginProps) {
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-[#1D1D1F] dark:text-white group-hover:text-[#0071E3] transition-colors">
-                    Brody &amp; Co. Architecture
+                    Brody Luxury Goods
                   </div>
-                  <div className="text-[10px] text-[#86868B]">Marcus Brody (High-Performance Web App)</div>
+                  <div className="text-[10px] text-[#86868B]">marcus@brodydesign.co (Password: client123)</div>
+                </div>
+              </div>
+              <span className="text-[10px] font-semibold text-[#0071E3] opacity-0 group-hover:opacity-100 transition-opacity">
+                Select &rarr;
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleQuickLogin('client@codexdynamics.com', 'client123')}
+              className="w-full p-2.5 rounded-xl bg-black/[0.03] dark:bg-white/[0.05] hover:bg-black/[0.06] dark:hover:bg-white/[0.09] text-left transition-colors flex items-center justify-between group"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="size-7 rounded-lg bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold text-xs">
+                  M
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-[#1D1D1F] dark:text-white group-hover:text-[#0071E3] transition-colors">
+                    Morgan Media (Demo Client)
+                  </div>
+                  <div className="text-[10px] text-[#86868B]">client@codexdynamics.com (Password: client123)</div>
                 </div>
               </div>
               <span className="text-[10px] font-semibold text-[#0071E3] opacity-0 group-hover:opacity-100 transition-opacity">

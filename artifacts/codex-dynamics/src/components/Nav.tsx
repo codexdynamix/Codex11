@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Lock } from "lucide-react";
 import { useEffect, useState, type MouseEvent } from "react";
 import {
   FacebookLogo,
@@ -22,6 +22,8 @@ import { useContactModal } from "@/context/ContactModalContext";
 import { usePreviewMode } from "@/context/PreviewModeContext";
 import { hrefToPreviewPage, isDarkHex } from "@/lib/theme-engine";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ClientLoginModal } from "@/components/ClientLoginModal";
+import { readPortalSession, type PortalSession } from "@/services/portalAuth";
 
 function Mark({ letter, logoUrl }: { letter?: string; logoUrl?: string }) {
   if (logoUrl) {
@@ -166,6 +168,19 @@ export function Nav() {
   const [open, setOpen] = useState(false);
   const [progress, setProgress] = useState(0);
   const [scrolled, setScrolled] = useState(false);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [portalSession, setPortalSessionState] = useState<PortalSession | null>(() => readPortalSession());
+
+  useEffect(() => {
+    const handleAuth = () => setPortalSessionState(readPortalSession());
+    const handleOpenLogin = () => setLoginModalOpen(true);
+    window.addEventListener("cdx_portal_auth_changed", handleAuth);
+    window.addEventListener("cdx_open_login_modal", handleOpenLogin);
+    return () => {
+      window.removeEventListener("cdx_portal_auth_changed", handleAuth);
+      window.removeEventListener("cdx_open_login_modal", handleOpenLogin);
+    };
+  }, []);
 
   const onNavHref = (href: string) => (e: MouseEvent<HTMLAnchorElement>) => {
     if (preview.isPreview && preview.navigateTo) {
@@ -407,18 +422,19 @@ export function Nav() {
               }}
             />
             <ThemeToggle variant="icon" />
-            <a
-              href="/portal/dashboard"
+            <button
+              type="button"
+              onClick={() => setLoginModalOpen(true)}
               className={cn(
-                "hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold border transition-all duration-150 cursor-pointer",
+                "hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12px] font-semibold border transition-all duration-150 cursor-pointer shadow-xs",
                 light
                   ? "border-black/10 bg-black/5 hover:bg-black/10 text-label"
                   : "border-white/15 bg-white/10 hover:bg-white/20 text-paper"
               )}
             >
-              <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Portal</span>
-            </a>
+              <Lock size={12} className="text-blue-500" />
+              <span>Login</span>
+            </button>
             <Button
               type="button"
               size="sm"
@@ -485,20 +501,23 @@ export function Nav() {
                     {item.label}
                   </motion.a>
                 ))}
-                <motion.a
-                  href="/portal/dashboard"
+                <motion.button
+                  type="button"
                   initial={{ opacity: 0, y: 12, filter: "blur(4px)" }}
                   animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                   transition={{ delay: 0.35, duration: 0.4 }}
-                  onClick={() => setOpen(false)}
-                  className="mt-4 flex items-center justify-between px-5 py-3 rounded-2xl bg-white/10 border border-white/20 text-paper font-semibold text-lg hover:bg-white/20 transition-colors"
+                  onClick={() => {
+                    setOpen(false);
+                    setLoginModalOpen(true);
+                  }}
+                  className="mt-4 w-full flex items-center justify-between px-5 py-3 rounded-2xl bg-white/10 border border-white/20 text-paper font-semibold text-lg hover:bg-white/20 transition-colors cursor-pointer"
                 >
                   <span className="flex items-center gap-2">
-                    <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span>Client Portal</span>
+                    <Lock size={18} className="text-blue-400" />
+                    <span>Client Login</span>
                   </span>
                   <span className="text-white/60">&rarr;</span>
-                </motion.a>
+                </motion.button>
               </div>
 
               <div className="space-y-5">
@@ -605,6 +624,15 @@ export function Nav() {
           </motion.div>
         ) : null}
       </AnimatePresence>
+
+      <ClientLoginModal
+        isOpen={loginModalOpen}
+        onClose={() => setLoginModalOpen(false)}
+        onOpenContact={() => {
+          setLoginModalOpen(false);
+          openContactModal();
+        }}
+      />
     </header>
   );
 }

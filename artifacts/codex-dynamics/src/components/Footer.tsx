@@ -228,10 +228,18 @@ export function Footer() {
                 </a>
               </li>
               <li>
-                <a href="/portal/dashboard" className="hover:text-label transition-colors font-semibold text-label flex items-center gap-1.5">
-                  <span className="size-1.5 rounded-full bg-emerald-500" />
-                  <span>Client Portal</span>
-                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof window !== "undefined") {
+                      window.dispatchEvent(new CustomEvent("cdx_open_login_modal"));
+                    }
+                  }}
+                  className="hover:text-label transition-colors font-semibold text-label flex items-center gap-1.5 cursor-pointer text-left"
+                >
+                  <span className="size-1.5 rounded-full bg-blue-500" />
+                  <span>Client Login</span>
+                </button>
               </li>
             </ul>
           </div>

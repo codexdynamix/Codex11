@@ -1071,6 +1071,49 @@ export const portalDb = {
     return db.clients.find((c) => c.email.toLowerCase().trim() === clean) || null;
   },
 
+  async syncWithServer(clientId: string): Promise<void> {
+    if (typeof window === 'undefined' || !clientId) return;
+    try {
+      const res = await fetch(`/api/portal/data?client_id=${encodeURIComponent(clientId)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ok) {
+          const db = loadDatabase();
+          if (data.client) {
+            const idx = db.clients.findIndex((c) => c.id === clientId);
+            if (idx !== -1) db.clients[idx] = { ...db.clients[idx], ...data.client };
+            else db.clients.push(data.client);
+          }
+          if (Array.isArray(data.websites) && data.websites.length > 0) {
+            db.websites = [...db.websites.filter((w) => w.clientId !== clientId), ...data.websites];
+          }
+          if (Array.isArray(data.projects) && data.projects.length > 0) {
+            db.projects = [...db.projects.filter((p) => p.clientId !== clientId), ...data.projects];
+          }
+          if (Array.isArray(data.invoices) && data.invoices.length > 0) {
+            db.invoices = [...db.invoices.filter((i) => i.clientId !== clientId), ...data.invoices];
+          }
+          if (Array.isArray(data.payments) && data.payments.length > 0) {
+            db.payments = [...db.payments.filter((p) => p.clientId !== clientId), ...data.payments];
+          }
+          if (Array.isArray(data.hosting) && data.hosting.length > 0) {
+            db.hosting = [...db.hosting.filter((h) => h.clientId !== clientId), ...data.hosting];
+          }
+          if (Array.isArray(data.domains) && data.domains.length > 0) {
+            db.domains = [...db.domains.filter((d) => d.clientId !== clientId), ...data.domains];
+          }
+          if (Array.isArray(data.tickets) && data.tickets.length > 0) {
+            db.supportTickets = [...db.supportTickets.filter((t) => t.clientId !== clientId), ...data.tickets];
+          }
+          if (Array.isArray(data.files) && data.files.length > 0) {
+            db.files = [...db.files.filter((f) => f.clientId !== clientId), ...data.files];
+          }
+          saveDatabase(db);
+        }
+      }
+    } catch (_) {}
+  },
+
   updateClientProfile(clientId: string, updates: Partial<PortalClient>): PortalClient {
     const db = loadDatabase();
     const idx = db.clients.findIndex((c) => c.id === clientId);
@@ -1093,6 +1136,18 @@ export const portalDb = {
 
     saveDatabase(db);
     this.logAudit(clientId, db.clients[idx].name, 'PROFILE_UPDATED', 'Updated client profile and contact preferences');
+
+    try {
+      fetch('/api/portal/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId,
+          ...safeUpdates,
+        }),
+      }).catch(() => {});
+    } catch (_) {}
+
     return db.clients[idx];
   },
 

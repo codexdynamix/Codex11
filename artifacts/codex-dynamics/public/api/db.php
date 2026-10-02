@@ -230,6 +230,174 @@ function initSchema(PDO $pdo): void {
         );
     ");
 
+    // 10. Staff Users Table
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS staff_users (
+            id TEXT PRIMARY KEY,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            name TEXT NOT NULL,
+            role TEXT NOT NULL,
+            office_id TEXT,
+            team_id TEXT,
+            status TEXT DEFAULT 'Active',
+            capabilities TEXT,
+            last_login_at TEXT,
+            created_at TEXT
+        );
+    ");
+
+    // 11. Client Websites Table
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS client_websites (
+            id TEXT PRIMARY KEY,
+            client_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            domain TEXT NOT NULL,
+            website_url TEXT NOT NULL,
+            back_office_url TEXT NOT NULL,
+            status TEXT DEFAULT 'Active',
+            connection_status TEXT DEFAULT 'Connected',
+            connector_id TEXT,
+            connector_secret TEXT,
+            access_enabled INTEGER DEFAULT 1,
+            tech_stack TEXT,
+            hosting_plan TEXT,
+            ssl_status TEXT,
+            created_at TEXT,
+            updated_at TEXT
+        );
+    ");
+
+    // 12. Client Projects Table
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS client_projects (
+            id TEXT PRIMARY KEY,
+            client_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT,
+            service TEXT,
+            status TEXT DEFAULT 'In Progress',
+            progress INTEGER DEFAULT 0,
+            start_date TEXT,
+            target_date TEXT,
+            team_lead TEXT,
+            milestones TEXT,
+            recent_updates TEXT,
+            created_at TEXT,
+            updated_at TEXT
+        );
+    ");
+
+    // 13. Client Invoices Table
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS client_invoices (
+            id TEXT PRIMARY KEY,
+            client_id TEXT NOT NULL,
+            invoice_number TEXT NOT NULL,
+            issue_date TEXT NOT NULL,
+            due_date TEXT NOT NULL,
+            paid_date TEXT,
+            status TEXT DEFAULT 'Pending',
+            currency TEXT DEFAULT 'USD',
+            subtotal REAL DEFAULT 0,
+            tax REAL DEFAULT 0,
+            total REAL DEFAULT 0,
+            amount_paid REAL DEFAULT 0,
+            balance_due REAL DEFAULT 0,
+            payment_method TEXT,
+            line_items TEXT,
+            notes TEXT,
+            created_at TEXT
+        );
+    ");
+
+    // 14. Client Payments Table
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS client_payments (
+            id TEXT PRIMARY KEY,
+            client_id TEXT NOT NULL,
+            invoice_id TEXT,
+            receipt_number TEXT NOT NULL,
+            payment_date TEXT NOT NULL,
+            amount REAL DEFAULT 0,
+            payment_method TEXT,
+            transaction_reference TEXT,
+            description TEXT,
+            status TEXT DEFAULT 'Completed',
+            created_at TEXT
+        );
+    ");
+
+    // 15. Client Hosting Table
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS client_hosting (
+            id TEXT PRIMARY KEY,
+            client_id TEXT NOT NULL,
+            website_id TEXT,
+            website_name TEXT,
+            provider TEXT,
+            plan TEXT,
+            status TEXT DEFAULT 'Active',
+            start_date TEXT,
+            renewal_date TEXT,
+            billing_frequency TEXT DEFAULT 'Monthly',
+            amount REAL DEFAULT 0,
+            auto_renew INTEGER DEFAULT 1,
+            server_region TEXT,
+            ip_address TEXT,
+            uptime TEXT DEFAULT '99.99%'
+        );
+    ");
+
+    // 16. Client Domains Table
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS client_domains (
+            id TEXT PRIMARY KEY,
+            client_id TEXT NOT NULL,
+            domain_name TEXT NOT NULL,
+            registrar TEXT DEFAULT 'Codex Managed',
+            registration_date TEXT,
+            expiration_date TEXT,
+            renewal_status TEXT DEFAULT 'Auto-Renew Active',
+            auto_renew INTEGER DEFAULT 1,
+            dns_management INTEGER DEFAULT 1,
+            nameservers TEXT,
+            records TEXT
+        );
+    ");
+
+    // 17. Client Support Tickets Table
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS client_support_tickets (
+            id TEXT PRIMARY KEY,
+            client_id TEXT NOT NULL,
+            ticket_number TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            category TEXT DEFAULT 'General',
+            priority TEXT DEFAULT 'Medium',
+            status TEXT DEFAULT 'Open',
+            assigned_agent TEXT,
+            messages TEXT,
+            created_at TEXT,
+            updated_at TEXT
+        );
+    ");
+
+    // 18. Client Files Table
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS client_files (
+            id TEXT PRIMARY KEY,
+            client_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            category TEXT DEFAULT 'Deliverables',
+            size TEXT,
+            uploaded_at TEXT,
+            file_type TEXT,
+            download_url TEXT
+        );
+    ");
+
     seedInitialData($pdo);
 }
 

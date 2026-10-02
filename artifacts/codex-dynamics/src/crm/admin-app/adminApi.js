@@ -95,6 +95,31 @@ export function mapAdminToUser(admin) {
  */
 export async function adminLogin(email, password, requestedRole) {
   const normEmail = (email || '').toLowerCase().trim();
+
+  try {
+    const res = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: normEmail, password, role: requestedRole }),
+    });
+
+    const data = await res.json();
+    if (res.ok && data.ok && data.user) {
+      setAdminToken(data.token);
+      setStoredAdminProfile(data.user);
+      return data.user;
+    }
+
+    if (data.error) {
+      throw new Error(data.error);
+    }
+  } catch (err) {
+    if (err.message && !err.message.includes('fetch')) {
+      throw err;
+    }
+  }
+
+  // Fallback for offline resilience
   let role = requestedRole || 'Super Admin';
   let name = 'Sarah Admin';
   let id = 'adm_sa';

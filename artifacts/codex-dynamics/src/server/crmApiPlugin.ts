@@ -1,40 +1,13 @@
 import type { Plugin } from 'vite';
 import fs from 'fs';
 import path from 'path';
-import { spawn } from 'child_process';
 import JSZip from 'jszip';
 import { getSqliteDb } from './sqliteDb';
-
-let phpProcess: any = null;
-
-function ensurePhpServer() {
-  if (phpProcess) return;
-  const serverDir = import.meta.dirname || __dirname;
-  const apiDir = path.resolve(serverDir, '../../public/api');
-  const indexPhp = path.join(apiDir, 'index.php');
-
-  try {
-    phpProcess = spawn('php', ['-S', '127.0.0.1:8080', '-t', apiDir, indexPhp], {
-      stdio: 'ignore',
-      detached: false,
-    });
-    phpProcess.on('error', () => {
-      phpProcess = null;
-    });
-    phpProcess.on('exit', () => {
-      phpProcess = null;
-    });
-  } catch (_) {
-    phpProcess = null;
-  }
-}
 
 export function crmApiPlugin(): Plugin {
   return {
     name: 'codex-crm-api-plugin',
     configureServer(server) {
-      ensurePhpServer();
-
       server.middlewares.use(async (req, res, next) => {
         const url = req.url || '';
         if (!url.startsWith('/api/')) {
@@ -146,46 +119,7 @@ export function crmApiPlugin(): Plugin {
         }
 
         // -------------------------------------------------------------
-        // Try live PHP Backend first (PHP 8.2 CLI + PDO SQLite)
-        // -------------------------------------------------------------
-        try {
-          ensurePhpServer();
-          const phpTargetUrl = `http://127.0.0.1:8080${url}`;
-          const hasPayload = (method === 'POST' || method === 'PATCH' || method === 'PUT' || method === 'DELETE') && Object.keys(body).length > 0;
-          
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-          const phpRes = await fetch(phpTargetUrl, {
-            method,
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              ...((req.headers.authorization && { Authorization: req.headers.authorization }) || {}),
-            },
-            body: hasPayload ? JSON.stringify(body) : undefined,
-            signal: controller.signal,
-          });
-          clearTimeout(timeoutId);
-
-          if (phpRes.ok || phpRes.status < 500) {
-            if (method === 'HEAD') {
-              res.statusCode = phpRes.status;
-              res.setHeader('Content-Type', 'application/json; charset=utf-8');
-              res.setHeader('Access-Control-Allow-Origin', '*');
-              res.setHeader('X-Backend-Engine', 'PHP 8.2 PDO-SQLite');
-              return res.end();
-            }
-            const phpJson = await phpRes.json();
-            return sendJson(phpJson, phpRes.status, 'PHP 8.2 PDO-SQLite');
-          }
-        } catch (err: any) {
-          console.error('[CRM API Proxy Error]:', err?.message || err);
-          // Fall through to embedded engine if PHP is restarting or unavailable
-        }
-
-        // -------------------------------------------------------------
-        // Resilient Embedded SQL Engine fallback
+        // Resilient Embedded SQL Engine
         // -------------------------------------------------------------
         const db = getSqliteDb();
 
@@ -215,7 +149,7 @@ export function crmApiPlugin(): Plugin {
             const timeline = body.timeline || '';
             const message = body.message || '';
             const source = body.source || 'website_contact_modal';
-            const clientPassword = 'client' + Math.floor(100 + Math.random() * 900);
+            const clientPassword = (body.password || body.client_password || body.clientPassword || ('client' + Math.floor(100 + Math.random() * 900))).toString().trim();
 
             const commentHistory = message
               ? JSON.stringify([{ id: 'c_' + Date.now(), by_name: 'Website Intake', text: message, created_at: now }])
@@ -241,7 +175,29 @@ export function crmApiPlugin(): Plugin {
               VALUES (?, ?, ?, ?, ?, ?, '', ?, ?, 'Active', 1, 'New Client', ?, ?)
             `).run(id, name, company || name, email, clientPassword, phone, country, countryCode, now, now);
 
-            return sendJson({ ok: true, id, message: 'Inquiry received successfully' });
+            const newClient = {
+              id,
+              name,
+              company: company || name,
+              email,
+              phone,
+              address: '',
+              country,
+              countryCode,
+              status: 'Active',
+              portalEnabled: true,
+              tier: 'New Client',
+              lastLoginAt: now,
+              createdAt: now,
+            };
+
+            return sendJson({
+              ok: true,
+              id,
+              client: newClient,
+              token: `cdx_sess_${id}_${Date.now()}`,
+              message: 'Client account created successfully'
+            });
           }
 
           const rawLeads = db.prepare('SELECT * FROM leads ORDER BY created_at DESC').all();
@@ -327,7 +283,313 @@ export function crmApiPlugin(): Plugin {
             return sendJson({ ok: true });
           }
 
+          if (action === 'toggle_website_access') {
+            const websiteId = body.website_id || body.websiteId;
+            const enabled = body.access_enabled !== false && body.accessEnabled !== false ? 1 : 0;
+            db.prepare('UPDATE client_websites SET access_enabled = ?, updated_at = ? WHERE id = ?').run(enabled, new Date().toISOString(), websiteId);
+            return sendJson({ ok: true, website_id: websiteId, access_enabled: Boolean(enabled) });
+          }
+
+          if (action === 'update_client_password') {
+            const clientId = body.client_id || body.clientId;
+            const password = body.password || 'client123';
+            db.prepare('UPDATE portal_clients SET password = ? WHERE id = ?').run(password, clientId);
+            db.prepare('UPDATE leads SET client_password = ? WHERE id = ?').run(password, clientId);
+            return sendJson({ ok: true, client_id: clientId });
+          }
+
           return sendJson({ ok: true });
+        }
+
+        // -------------------------------------------------------------
+        // /api/admin/login: Staff Authentication backed by SQLite
+        // -------------------------------------------------------------
+        if (pathname === '/api/admin/login' && method === 'POST') {
+          const email = (body.email || '').trim().toLowerCase();
+          const password = (body.password || '').trim();
+
+          const staff = db.prepare('SELECT * FROM staff_users WHERE LOWER(email) = ?').get(email) as any;
+          if (!staff || staff.password !== password) {
+            return sendJson({ ok: false, error: 'Invalid staff email or password.' }, 401);
+          }
+
+          if (staff.status !== 'Active') {
+            return sendJson({ ok: false, error: 'This staff account is currently suspended.' }, 403);
+          }
+
+          const now = new Date().toISOString();
+          db.prepare('UPDATE staff_users SET last_login_at = ? WHERE id = ?').run(now, staff.id);
+
+          const token = `token_${staff.id}_${Date.now()}`;
+          const capabilities = staff.capabilities ? JSON.parse(staff.capabilities) : {
+            lead_upload: true, create_agent: true, registrations: true, notifications: true,
+            security: true, content: true, enquiries: true, chat: true, settings: true
+          };
+
+          return sendJson({
+            ok: true,
+            token,
+            user: {
+              id: staff.id,
+              name: staff.name,
+              email: staff.email,
+              role: staff.role,
+              office_id: staff.office_id,
+              team_id: staff.team_id,
+              officeId: staff.office_id,
+              teamId: staff.team_id,
+              status: staff.status,
+              last_login_at: now,
+              capabilities,
+            },
+          });
+        }
+
+        // -------------------------------------------------------------
+        // /api/portal/login: Client Authentication backed by SQLite
+        // -------------------------------------------------------------
+        if (pathname === '/api/portal/login' && method === 'POST') {
+          const email = (body.email || '').trim().toLowerCase();
+          const password = (body.password || '').trim();
+
+          const client = db.prepare('SELECT * FROM portal_clients WHERE LOWER(email) = ?').get(email) as any;
+          if (!client) {
+            return sendJson({ ok: false, error: 'No client account found with this email address.' }, 404);
+          }
+
+          if (!client.portal_enabled && client.portal_enabled !== 1) {
+            return sendJson({ ok: false, error: 'This client portal account is currently disabled.' }, 403);
+          }
+
+          if (client.password && password && client.password !== password) {
+            return sendJson({ ok: false, error: 'Incorrect password. Please try again.' }, 401);
+          }
+
+          const now = new Date().toISOString();
+          db.prepare('UPDATE portal_clients SET last_login_at = ? WHERE id = ?').run(now, client.id);
+
+          const token = `cdx_sess_${client.id}_${Date.now()}`;
+          return sendJson({
+            ok: true,
+            token,
+            client: {
+              id: client.id,
+              name: client.name,
+              company: client.company,
+              email: client.email,
+              phone: client.phone,
+              address: client.address,
+              country: client.country,
+              countryCode: client.country_code,
+              status: client.status,
+              portalEnabled: Boolean(client.portal_enabled),
+              tier: client.tier,
+              lastLoginAt: now,
+              createdAt: client.created_at,
+            },
+          });
+        }
+
+        // -------------------------------------------------------------
+        // /api/portal/data: Complete Client Portal Data from SQLite
+        // -------------------------------------------------------------
+        if (pathname === '/api/portal/data') {
+          const clientId = parsedUrl.searchParams.get('client_id') || '';
+          if (!clientId) {
+            return sendJson({ error: 'Missing client_id parameter' }, 400);
+          }
+
+          const client = db.prepare('SELECT * FROM portal_clients WHERE id = ?').get(clientId) as any;
+          const websites = db.prepare('SELECT * FROM client_websites WHERE client_id = ?').all(clientId).map((w: any) => ({
+            ...w,
+            clientId: w.client_id,
+            websiteUrl: w.website_url,
+            backOfficeUrl: w.back_office_url,
+            connectionStatus: w.connection_status,
+            connectorId: w.connector_id,
+            connectorSecret: w.connector_secret,
+            accessEnabled: Boolean(w.access_enabled),
+            techStack: w.tech_stack ? (w.tech_stack.startsWith('[') ? JSON.parse(w.tech_stack) : w.tech_stack.split(',').map((s: string) => s.trim())) : [],
+            hostingPlan: w.hosting_plan,
+            sslStatus: w.ssl_status,
+            createdAt: w.created_at,
+            updatedAt: w.updated_at,
+          }));
+
+          const projects = db.prepare('SELECT * FROM client_projects WHERE client_id = ?').all(clientId).map((p: any) => ({
+            ...p,
+            clientId: p.client_id,
+            startDate: p.start_date,
+            targetDate: p.target_date,
+            teamLead: p.team_lead,
+            milestones: p.milestones ? JSON.parse(p.milestones) : [],
+            recentUpdates: p.recent_updates ? JSON.parse(p.recent_updates) : [],
+          }));
+
+          const invoices = db.prepare('SELECT * FROM client_invoices WHERE client_id = ?').all(clientId).map((i: any) => ({
+            ...i,
+            clientId: i.client_id,
+            invoiceNumber: i.invoice_number,
+            issueDate: i.issue_date,
+            dueDate: i.due_date,
+            paidDate: i.paid_date,
+            amountPaid: i.amount_paid,
+            balanceDue: i.balance_due,
+            paymentMethod: i.payment_method,
+            lineItems: i.line_items ? JSON.parse(i.line_items) : [],
+          }));
+
+          const payments = db.prepare('SELECT * FROM client_payments WHERE client_id = ?').all(clientId).map((p: any) => ({
+            ...p,
+            clientId: p.client_id,
+            invoiceId: p.invoice_id,
+            receiptNumber: p.receipt_number,
+            paymentDate: p.payment_date,
+            paymentMethod: p.payment_method,
+            transactionReference: p.transaction_reference,
+          }));
+
+          const hosting = db.prepare('SELECT * FROM client_hosting WHERE client_id = ?').all(clientId).map((h: any) => ({
+            ...h,
+            clientId: h.client_id,
+            websiteId: h.website_id,
+            websiteName: h.website_name,
+            startDate: h.start_date,
+            renewalDate: h.renewal_date,
+            billingFrequency: h.billing_frequency,
+            autoRenew: Boolean(h.auto_renew),
+            serverRegion: h.server_region,
+            ipAddress: h.ip_address,
+          }));
+
+          const domains = db.prepare('SELECT * FROM client_domains WHERE client_id = ?').all(clientId).map((d: any) => ({
+            ...d,
+            clientId: d.client_id,
+            domainName: d.domain_name,
+            registrationDate: d.registration_date,
+            expirationDate: d.expiration_date,
+            renewalStatus: d.renewal_status,
+            autoRenew: Boolean(d.auto_renew),
+            dnsManagement: Boolean(d.dns_management),
+            nameservers: d.nameservers ? JSON.parse(d.nameservers) : [],
+            records: d.records ? JSON.parse(d.records) : [],
+          }));
+
+          const tickets = db.prepare('SELECT * FROM client_support_tickets WHERE client_id = ? ORDER BY created_at DESC').all(clientId).map((t: any) => ({
+            ...t,
+            clientId: t.client_id,
+            ticketNumber: t.ticket_number,
+            assignedAgent: t.assigned_agent,
+            messages: t.messages ? JSON.parse(t.messages) : [],
+          }));
+
+          const files = db.prepare('SELECT * FROM client_files WHERE client_id = ?').all(clientId).map((f: any) => ({
+            ...f,
+            clientId: f.client_id,
+            uploadedAt: f.uploaded_at,
+            fileType: f.file_type,
+            downloadUrl: f.download_url,
+          }));
+
+          const notifications = db.prepare('SELECT * FROM notifications WHERE user_id = ? OR user_id IS NULL ORDER BY created_at DESC').all(clientId).map((n: any) => ({
+            ...n,
+            clientId: n.user_id,
+            read: Boolean(n.is_read),
+          }));
+
+          return sendJson({
+            ok: true,
+            client: client ? {
+              id: client.id,
+              name: client.name,
+              company: client.company,
+              email: client.email,
+              phone: client.phone,
+              address: client.address,
+              country: client.country,
+              countryCode: client.country_code,
+              status: client.status,
+              portalEnabled: Boolean(client.portal_enabled),
+              tier: client.tier,
+              lastLoginAt: client.last_login_at,
+              createdAt: client.created_at,
+            } : null,
+            websites,
+            projects,
+            invoices,
+            payments,
+            hosting,
+            domains,
+            tickets,
+            files,
+            notifications,
+          });
+        }
+
+        // -------------------------------------------------------------
+        // /api/portal/ticket: Create or Reply to Support Ticket in SQLite
+        // -------------------------------------------------------------
+        if (pathname === '/api/portal/ticket' && method === 'POST') {
+          const clientId = body.clientId || body.client_id;
+          const ticketId = body.ticketId || body.ticket_id;
+          const text = (body.text || body.message || '').trim();
+          const sender = body.sender || 'client';
+          const senderName = body.senderName || body.sender_name || 'Client';
+          const now = new Date().toISOString();
+
+          if (ticketId) {
+            // Reply to existing ticket
+            const existing = db.prepare('SELECT * FROM client_support_tickets WHERE id = ?').get(ticketId) as any;
+            if (existing) {
+              const msgs = existing.messages ? JSON.parse(existing.messages) : [];
+              msgs.push({ id: 'msg_' + Date.now(), sender, senderName, text, createdAt: now });
+              const nextStatus = sender === 'client' ? 'Open' : existing.status;
+              db.prepare('UPDATE client_support_tickets SET messages = ?, status = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(msgs), nextStatus, now, ticketId);
+              return sendJson({ ok: true, ticket_id: ticketId, messages: msgs });
+            }
+          } else {
+            // Create new ticket
+            const newId = 'tick_' + Date.now();
+            const ticketNumber = 'TICK-' + Math.floor(100 + Math.random() * 900);
+            const subject = body.subject || 'Support Request';
+            const category = body.category || 'General';
+            const priority = body.priority || 'Medium';
+            const initialMsgs = [{ id: 'msg_' + Date.now(), sender: 'client', senderName, text, createdAt: now }];
+
+            db.prepare(`
+              INSERT INTO client_support_tickets (id, client_id, ticket_number, subject, category, priority, status, assigned_agent, messages, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, 'Open', 'Alex Agent', ?, ?, ?)
+            `).run(newId, clientId, ticketNumber, subject, category, priority, JSON.stringify(initialMsgs), now, now);
+
+            return sendJson({ ok: true, ticket_id: newId, ticket_number: ticketNumber });
+          }
+        }
+
+        // -------------------------------------------------------------
+        // /api/portal/profile: Update Client Profile in SQLite
+        // -------------------------------------------------------------
+        if (pathname === '/api/portal/profile' && method === 'POST') {
+          const clientId = body.clientId || body.client_id;
+          const name = body.name || '';
+          const company = body.company || '';
+          const phone = body.phone || '';
+          const address = body.address || '';
+          const country = body.country || 'United Kingdom';
+          const password = body.password || '';
+
+          if (password) {
+            db.prepare('UPDATE portal_clients SET name = ?, company = ?, phone = ?, address = ?, country = ?, password = ? WHERE id = ?')
+              .run(name, company, phone, address, country, password, clientId);
+            db.prepare('UPDATE leads SET name = ?, company = ?, phone = ?, country = ?, client_password = ? WHERE id = ?')
+              .run(name, company, phone, country, password, clientId);
+          } else {
+            db.prepare('UPDATE portal_clients SET name = ?, company = ?, phone = ?, address = ?, country = ? WHERE id = ?')
+              .run(name, company, phone, address, country, clientId);
+            db.prepare('UPDATE leads SET name = ?, company = ?, phone = ?, country = ? WHERE id = ?')
+              .run(name, company, phone, country, clientId);
+          }
+
+          return sendJson({ ok: true, client_id: clientId });
         }
 
         if (pathname === '/api/admin/users') {

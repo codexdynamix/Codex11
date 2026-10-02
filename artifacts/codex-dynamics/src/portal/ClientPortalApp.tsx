@@ -47,8 +47,19 @@ export function ClientPortalApp() {
     };
 
     window.addEventListener('popstate', handlePopState);
-    const handleAuthChange = () => setSession(readPortalSession());
+    const handleAuthChange = () => {
+      const s = readPortalSession();
+      setSession(s);
+      if (s?.client?.id) {
+        portalDb.syncWithServer(s.client.id);
+      }
+    };
     window.addEventListener('cdx_portal_auth_changed', handleAuthChange);
+
+    const initialSess = readPortalSession();
+    if (initialSess?.client?.id) {
+      portalDb.syncWithServer(initialSess.client.id);
+    }
 
     return () => {
       window.removeEventListener('popstate', handlePopState);

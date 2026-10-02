@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getLeadProfilePath } from '../leadProfileRouting.js';
 import { ROLE, getCountryFlag, LEAD_STATUSES } from '../shared.jsx';
 import { portalDb } from '../../../services/portalDatabase';
+import { setPortalSession } from '../../../services/portalAuth';
 import {
   getLeadNotificationsAsAdmin,
   getUserProfileHistoryApi,
@@ -61,6 +62,7 @@ export default function LeadProfileModal({
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [passwordCopied, setPasswordCopied] = useState(false);
+  const [portalAccessEnabled, setPortalAccessEnabled] = useState(true);
 
   // Client Support chat state
   const [chatMessages, setChatMessages] = useState([]);
@@ -174,6 +176,45 @@ export default function LeadProfileModal({
     } finally {
       setIsUpdatingPassword(false);
     }
+  };
+
+  const handleLaunchClientPortal = () => {
+    let client = portalDb.getClientById(lead.id) || portalDb.getClientByEmail(lead.email);
+    if (!client) {
+      client = {
+        id: lead.id,
+        name: lead.name || `${lead.first_name || ''} ${lead.last_name || ''}`.trim() || 'Client',
+        company: lead.company || lead.name || 'Client Org',
+        email: lead.email || '',
+        phone: lead.phone || '',
+        address: lead.address || '',
+        country: lead.country || 'United Kingdom',
+        countryCode: lead.country_code || 'GB',
+        status: 'Active',
+        portalEnabled: true,
+        tier: 'Enterprise Partner',
+        lastLoginAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      };
+      portalDb.adminCreateClient(client);
+    }
+    setPortalSession(client);
+    window.open('/portal/dashboard', '_blank');
+    showNotification(`Launched client portal session for ${client.name}`);
+  };
+
+  const handleTogglePortalAccess = () => {
+    const nextState = !portalAccessEnabled;
+    try {
+      portalDb.adminTogglePortalAccess(lead.id, nextState);
+    } catch (_) {}
+    setPortalAccessEnabled(nextState);
+    fetch('/api/crm/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'toggle_portal_access', client_id: lead.id, portal_enabled: nextState }),
+    }).catch(() => {});
+    showNotification(`Client portal access ${nextState ? 'enabled' : 'disabled'} for ${lead.name}`);
   };
 
   const handleSendChatMessage = async (e) => {
@@ -661,9 +702,43 @@ export default function LeadProfileModal({
                     Administrators can view current client portal passwords and set new passwords when clients experience login issues.
                   </p>
                 </div>
-                <span style={{ fontSize: 11, background: 'rgba(48, 209, 88, 0.15)', color: '#30D158', border: '1px solid rgba(48, 209, 88, 0.3)', padding: '3px 10px', borderRadius: 9999, fontWeight: 600 }}>
-                  Portal Enabled
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <button
+                    type="button"
+                    onClick={handleTogglePortalAccess}
+                    style={{
+                      fontSize: 11,
+                      background: portalAccessEnabled ? 'rgba(48, 209, 88, 0.15)' : 'rgba(255, 69, 58, 0.15)',
+                      color: portalAccessEnabled ? '#30D158' : '#FF453A',
+                      border: `1px solid ${portalAccessEnabled ? 'rgba(48, 209, 88, 0.3)' : 'rgba(255, 69, 58, 0.3)'}`,
+                      padding: '5px 12px',
+                      borderRadius: 9999,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {portalAccessEnabled ? '● Portal Enabled' : '○ Portal Suspended'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleLaunchClientPortal}
+                    style={{
+                      fontSize: 12,
+                      background: '#0A84FF',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      padding: '6px 14px',
+                      borderRadius: 8,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <span>🚀 Launch Portal As Client</span>
+                  </button>
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 16 }}>
@@ -793,6 +868,34 @@ export default function LeadProfileModal({
                 <div style={{ fontSize: 11, color: 'var(--crm-text-secondary, #8E8E93)', marginTop: 8 }}>
                   Updating the password here immediately unlocks the client's login at <code style={{ color: '#0A84FF' }}>/portal/login</code>.
                 </div>
+              </div>
+
+              {/* Direct Portal Launch Banner */}
+              <div style={{ marginTop: 14, background: 'rgba(10, 132, 255, 0.08)', border: '1px solid rgba(10, 132, 255, 0.25)', borderRadius: 10, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#FFFFFF' }}>
+                    🚀 Direct Client Portal Session
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--crm-text-secondary, #8E8E93)', marginTop: 2 }}>
+                    Open the live workspace for <strong>{lead.name}</strong> to inspect their websites, project progress, invoices, and file vault.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleLaunchClientPortal}
+                  style={{
+                    background: '#0A84FF',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    padding: '8px 18px',
+                    borderRadius: 8,
+                    fontWeight: 600,
+                    fontSize: 12,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Open /portal/dashboard &rarr;
+                </button>
               </div>
             </div>
           )}
