@@ -1,13 +1,14 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { createRootRoute, Outlet } from "@tanstack/react-router";
 import { MemoryRouter, Route as ReactRouterRoute, Routes } from "react-router-dom";
 import { SiteConfigProvider } from "@/context/SiteConfigContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { ContactModalProvider } from "@/context/ContactModalContext";
-import CodexDynamicsAdminApp from "@/crm/admin-app/App.jsx";
 import { Toaster } from "sonner";
 import { TidioWidget } from "@/components/TidioWidget";
 import { GlobalVisitorTracker } from "@/components/GlobalVisitorTracker";
+
+const CodexDynamicsAdminApp = lazy(() => import("@/crm/admin-app/App.jsx"));
 
 export function RootShell() {
   const [mounted, setMounted] = useState(false);
@@ -28,11 +29,13 @@ export function RootShell() {
           <GlobalVisitorTracker />
           <TidioWidget />
           {isAdminPath ? (
-            <MemoryRouter initialEntries={[initialEntry]}>
-              <Routes>
-                <ReactRouterRoute path="/*" element={<CodexDynamicsAdminApp />} />
-              </Routes>
-            </MemoryRouter>
+            <Suspense fallback={<div role="status" aria-live="polite">Loading CRM…</div>}>
+              <MemoryRouter initialEntries={[initialEntry]}>
+                <Routes>
+                  <ReactRouterRoute path="/*" element={<CodexDynamicsAdminApp />} />
+                </Routes>
+              </MemoryRouter>
+            </Suspense>
           ) : (
             <Outlet />
           )}

@@ -31,7 +31,7 @@ if (!basePath) {
 export default defineConfig({
   base: basePath,
   plugins: [
-    tanstackRouter({ target: 'react', autoCodeSplitting: false }),
+    tanstackRouter({ target: 'react', autoCodeSplitting: true }),
     react(),
     tailwindcss(),
     runtimeErrorOverlay(),

@@ -544,6 +544,10 @@ export default function SiteSettingsTab({ showNotification = () => {} }) {
   const previewIframeRef = useRef(null);
   const fullscreenIframeRef = useRef(null);
 
+  useEffect(() => {
+    setPreviewLoaded(false);
+  }, [previewPage, previewKey]);
+
   const isDarkColor = (hex) => {
     if (!hex || typeof hex !== 'string') return true;
     const clean = hex.replace('#', '').trim();
@@ -3120,7 +3124,10 @@ export default function SiteSettingsTab({ showNotification = () => {} }) {
                     <button
                       type="button"
                       className="crm-preview-action-icon-btn"
-                      onClick={() => setPreviewKey((k) => k + 1)}
+                      onClick={() => {
+                        setPreviewLoaded(false);
+                        setPreviewKey((k) => k + 1);
+                      }}
                       title="Reload preview iframe"
                     >
                       <RefreshCw size={12} />
@@ -3204,6 +3211,12 @@ export default function SiteSettingsTab({ showNotification = () => {} }) {
 
                 {/* 3. Viewport Stage & Device Frame */}
                 <div className="crm-preview-stage">
+                  {!previewLoaded && (
+                    <div className="crm-preview-loading" role="status" aria-live="polite">
+                      <span className="crm-preview-loading-spinner" aria-hidden="true" />
+                      <span>Loading website preview…</span>
+                    </div>
+                  )}
                   <div
                     className={`crm-device-shell ${viewportMode}`}
                     style={{
