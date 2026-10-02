@@ -227,6 +227,12 @@ export function Footer() {
                   Blog & Insights
                 </a>
               </li>
+              <li>
+                <a href="/portal/dashboard" className="hover:text-label transition-colors font-semibold text-label flex items-center gap-1.5">
+                  <span className="size-1.5 rounded-full bg-emerald-500" />
+                  <span>Client Portal</span>
+                </a>
+              </li>
             </ul>
           </div>
 

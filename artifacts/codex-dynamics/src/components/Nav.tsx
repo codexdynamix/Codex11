@@ -407,6 +407,18 @@ export function Nav() {
               }}
             />
             <ThemeToggle variant="icon" />
+            <a
+              href="/portal/dashboard"
+              className={cn(
+                "hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold border transition-all duration-150 cursor-pointer",
+                light
+                  ? "border-black/10 bg-black/5 hover:bg-black/10 text-label"
+                  : "border-white/15 bg-white/10 hover:bg-white/20 text-paper"
+              )}
+            >
+              <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Portal</span>
+            </a>
             <Button
               type="button"
               size="sm"
@@ -473,6 +485,20 @@ export function Nav() {
                     {item.label}
                   </motion.a>
                 ))}
+                <motion.a
+                  href="/portal/dashboard"
+                  initial={{ opacity: 0, y: 12, filter: "blur(4px)" }}
+                  animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                  transition={{ delay: 0.35, duration: 0.4 }}
+                  onClick={() => setOpen(false)}
+                  className="mt-4 flex items-center justify-between px-5 py-3 rounded-2xl bg-white/10 border border-white/20 text-paper font-semibold text-lg hover:bg-white/20 transition-colors"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>Client Portal</span>
+                  </span>
+                  <span className="text-white/60">&rarr;</span>
+                </motion.a>
               </div>
 
               <div className="space-y-5">
