@@ -60,7 +60,7 @@ if ($apiPath === '/crm/leads') {
         $stmt->execute([$id, $firstName, $lastName, $name, $email, $phone, $company, $service, $budget, $timeline, $message, $source, $now, $now]);
 
         // Also record an audit log
-        $auditId = 'aud_' . time();
+        $auditId = 'aud_' . time() . '_' . substr(bin2hex(random_bytes(3)), 0, 4);
         $pdo->prepare("INSERT INTO audit_logs (id, user_id, client_name, action, details, ip_address, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
             ->execute([$auditId, $id, $name, 'CLIENT_INQUIRY', "Inquiry submitted: {$service}", $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1', $now]);
 
@@ -212,8 +212,9 @@ if (preg_match('#^/admin/users/([^/]+)/set-password$#', $apiPath, $m) || preg_ma
     $pdo->prepare("UPDATE leads SET client_password = ? WHERE id = ? OR email = ?")->execute([$newPassword, $userId, $userId]);
 
     // Record audit log
+    $auditId = 'aud_' . time() . '_' . substr(bin2hex(random_bytes(3)), 0, 4);
     $pdo->prepare("INSERT INTO audit_logs (id, user_id, action, details, created_at) VALUES (?, ?, 'PASSWORD_RESET', 'Admin updated account password', ?)")
-        ->execute(['aud_' . time(), $userId, date('c')]);
+        ->execute([$auditId, $userId, date('c')]);
 
     jsonResponse(['ok' => true, 'message' => 'Client portal password updated successfully.', 'password' => $newPassword]);
 }
@@ -283,8 +284,9 @@ if ($apiPath === '/admin/messages' || $apiPath === '/client/messages') {
         // Record audit activity
         $action = $sender === 'client' ? 'SUPPORT_MESSAGE_RECEIVED' : 'SUPPORT_MESSAGE_SENT';
         $details = $sender === 'client' ? "Client sent message: \"{$body}\"" : "Agent sent message: \"{$body}\"";
+        $auditId = 'aud_' . time() . '_' . substr(bin2hex(random_bytes(3)), 0, 4);
         $pdo->prepare("INSERT INTO audit_logs (id, user_id, action, details, created_at) VALUES (?, ?, ?, ?, ?)")
-            ->execute(['aud_' . time(), $userId, $action, substr($details, 0, 160), $now]);
+            ->execute([$auditId, $userId, $action, substr($details, 0, 160), $now]);
 
         jsonResponse([
             'ok' => true,

@@ -48,8 +48,8 @@ const PRESET_SAMPLE_IMAGES = [
   { label: 'E-Commerce Storefront', url: '/work/northline-logistics.jpg' },
   { label: 'VoIP Sales CRM', url: '/work/apex-sales.jpg' },
   { label: 'Branding & Figma UI', url: '/work/brand-identity.jpg' },
-  { label: 'Performance Ads & Funnel', url: '/work/meta-ads.jpg' },
-  { label: 'Lifecycle Marketing', url: '/work/email-marketing.jpg' },
+  { label: 'Performance Ads & Funnel', url: '/work/ads-growth.jpg' },
+  { label: 'Lifecycle Marketing', url: '/work/flow-retain-email.jpg' },
   { label: 'FinTech Deal Pipeline', url: '/work/northline-logistics.jpg' },
 ];
 

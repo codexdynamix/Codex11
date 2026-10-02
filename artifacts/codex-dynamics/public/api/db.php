@@ -355,4 +355,80 @@ function seedInitialData(PDO $pdo): void {
             $now
         ]);
     }
+
+    // Seed Projects if empty
+    $projCount = (int)$pdo->query("SELECT COUNT(*) FROM projects")->fetchColumn();
+    if ($projCount === 0) {
+        $now = date('c');
+        $stmt = $pdo->prepare("
+            INSERT INTO projects (title, site_name, site_url, description, category, image_url, is_published, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ");
+        $stmt->execute(['Vance Tech Capital Portal', 'Vance Capital', 'https://vancetech.io', 'Next-generation venture capital portfolio management and investor dashboard.', 'Websites & Web Apps', '/hero/web-apps.jpg', 1, $now]);
+        $stmt->execute(['Brody Luxury Storefront', 'Brody Goods', 'https://brodydesign.co', 'Bespoke high-conversion storefront with 3D product previews and instant checkout.', 'Websites & Web Apps', '/hero/design.jpg', 1, $now]);
+        $stmt->execute(['Apex Telephony & CRM Gateway', 'Apex VoIP', 'https://apextelecom.net', 'Omnichannel calling system, VoIP routing, and automated sales pipeline engine.', 'CRMs & Calling Systems', '/services/crm-calling.jpg', 1, $now]);
+        $stmt->execute(['Kroma Digital Studio', 'Kroma Brand', 'https://kromastudio.art', 'Identity guidelines, custom 3D design system, and multi-channel brand assets.', 'Graphic Design & Branding', '/services/graphic-design.jpg', 1, $now]);
+    }
+
+    // Seed Blogs if empty
+    $blogCount = (int)$pdo->query("SELECT COUNT(*) FROM blogs")->fetchColumn();
+    if ($blogCount === 0) {
+        $now = date('c');
+        $stmt = $pdo->prepare("
+            INSERT INTO blogs (title, slug, content, excerpt, category, author, status, featured_image, meta_description, reading_time, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ");
+        $stmt->execute([
+            'Engineering High-Throughput Web Applications on Edge Networks',
+            'engineering-high-throughput-web-apps-edge',
+            '<p>Modern enterprise platforms require sub-100ms global latency and zero-downtime rollouts. In this guide, we dive into how Codex Dynamics engineers edge architectures...</p>',
+            'How modern edge networks, reactive client state, and distributed caching unlock instantaneous web experiences.',
+            'Engineering',
+            'Codex Architecture Team',
+            'published',
+            '/hero/web-dev.jpg',
+            'Architecture blueprints for enterprise high-throughput web applications.',
+            4,
+            $now,
+            $now
+        ]);
+        $stmt->execute([
+            'The Blueprint for High-Converting Digital Storefronts',
+            'blueprint-high-converting-storefronts',
+            '<p>Conversion rate optimization starts with layout clarity, tactile typography, and frictionless checkout flows...</p>',
+            'Strategic design patterns and technical optimizations that drive 3x conversion improvements for commerce brands.',
+            'Design & UX',
+            'Codex Creative Studio',
+            'published',
+            '/hero/design.jpg',
+            'Design patterns and optimizations for high-converting ecommerce storefronts.',
+            5,
+            $now,
+            $now
+        ]);
+    }
+
+    // Seed Reviews if empty
+    $revCount = (int)$pdo->query("SELECT COUNT(*) FROM reviews")->fetchColumn();
+    if ($revCount === 0) {
+        $now = date('c');
+        $stmt = $pdo->prepare("
+            INSERT INTO reviews (author, rating, comment, is_published, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        ");
+        $stmt->execute([
+            'Eleanor Vance (Vance Tech Capital)',
+            5,
+            'Codex Dynamics completely transformed our corporate presence. The client portal and real-time reporting have been a game changer for our LP relationships.',
+            1,
+            $now
+        ]);
+        $stmt->execute([
+            'Marcus Brody (Brody Luxury Goods)',
+            5,
+            'Incredible execution speed and attention to detail. Our mobile conversion went up 42% in the first two weeks post-launch.',
+            1,
+            $now
+        ]);
+    }
 }

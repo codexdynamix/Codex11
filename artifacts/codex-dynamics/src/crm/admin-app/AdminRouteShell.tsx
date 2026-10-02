@@ -7,7 +7,9 @@ function AdminUrlSync() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const fullPath = `/admin${location.pathname === "/" ? "" : location.pathname}${location.search}${location.hash}`;
+    const locPath = location.pathname;
+    const cleanPath = locPath.startsWith("/admin") ? locPath : `/admin${locPath === "/" ? "" : locPath}`;
+    const fullPath = `${cleanPath}${location.search}${location.hash}`;
     if (window.location.pathname + window.location.search !== fullPath) {
       window.history.replaceState(null, "", fullPath);
     }
