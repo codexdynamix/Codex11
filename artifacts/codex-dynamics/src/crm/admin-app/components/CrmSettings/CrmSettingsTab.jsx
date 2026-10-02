@@ -5,14 +5,12 @@ import {
   ACCENT_SWATCHES,
   DENSITY_OPTIONS,
   RADIUS_OPTIONS,
-  COOLORS_SEEDS,
   DEFAULT_CRM_SETTINGS,
   getCrmThemeSettings,
   saveCrmThemeSettings,
   applyCrmThemeToDom,
   generateHarmoniousCrmColors,
   calcContrast,
-  COLOR_PALETTES,
 } from './crmThemeState';
 import {
   Palette,
@@ -22,17 +20,13 @@ import {
   Sparkles,
   Layout,
   Sliders,
-  Eye,
   Lock,
   Unlock,
   Copy,
   RefreshCw,
   Sun,
   Moon,
-  Search,
-  CheckCircle2,
-  ChevronRight,
-  Flame,
+  ChevronDown,
   Wand2,
 } from 'lucide-react';
 
@@ -43,9 +37,6 @@ export default function CrmSettingsTab({ showNotification }) {
 
   // Coolors Interactive Palette Generator Stage
   const [generatorMode, setGeneratorMode] = useState('dark'); // 'dark' | 'light' | 'all'
-  const [paletteFilter, setPaletteFilter] = useState('all');
-  const [paletteSearch, setPaletteSearch] = useState('');
-  const [copiedPaletteId, setCopiedPaletteId] = useState(null);
   const [palettePillars, setPalettePillars] = useState(() => [
     { id: 'accent', label: 'Primary Accent', hex: '#0A84FF', locked: false, desc: 'Action buttons & pills' },
     { id: 'bg', label: 'Canvas Background', hex: '#16171B', locked: false, desc: 'Apple dark gray base' },
@@ -78,10 +69,10 @@ export default function CrmSettingsTab({ showNotification }) {
   // Keyboard shortcut: Spacebar generates a new palette when on this tab
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.code === 'Space' && !['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
-        e.preventDefault();
-        handleGenerateHarmoniousPalette();
-      }
+      if (e.code !== 'Space' || !(e.target instanceof HTMLElement)) return;
+      if (e.target.closest('button, summary, a, input, textarea, select, [contenteditable="true"], [role="button"]')) return;
+      e.preventDefault();
+      handleGenerateHarmoniousPalette();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -132,32 +123,6 @@ export default function CrmSettingsTab({ showNotification }) {
     if (showNotification) {
       showNotification('Applied generated palette to CRM. Click Save & Apply to persist.');
     }
-  };
-
-  const applyLibraryPalette = (palette) => {
-    setSettings((prev) => ({
-      ...prev,
-      accentColor: palette.primary,
-      customBg: palette.bg,
-      customCard: palette.card,
-    }));
-    setPalettePillars([
-      { id: 'accent', label: 'Primary Accent', hex: palette.primary, locked: false, desc: 'Action buttons & pills' },
-      { id: 'bg', label: 'Canvas Background', hex: palette.bg, locked: false, desc: 'Apple gray base' },
-      { id: 'card', label: 'Card Surface', hex: palette.card, locked: false, desc: 'Elevated panels' },
-      { id: 'glow', label: 'Accent Detail', hex: palette.accent, locked: false, desc: 'Active badges' },
-      { id: 'secondary', label: 'Secondary Gray', hex: palette.secondary, locked: false, desc: 'Hover & borders' },
-    ]);
-    setSaved(false);
-    if (showNotification) showNotification(`Applied palette: ${palette.name}`);
-  };
-
-  const copyLibraryPalette = (palette) => {
-    const hexes = `${palette.name}: ${palette.primary} ${palette.bg} ${palette.card} ${palette.accent} ${palette.secondary}`;
-    navigator.clipboard.writeText(hexes);
-    setCopiedPaletteId(palette.id);
-    setTimeout(() => setCopiedPaletteId(null), 1400);
-    if (showNotification) showNotification(`Copied ${palette.name} hex values`);
   };
 
   const handleThemeSelect = (preset) => {
@@ -217,21 +182,8 @@ export default function CrmSettingsTab({ showNotification }) {
   const activePreset = CRM_THEME_PRESETS.find((p) => p.id === settings.themeId) || CRM_THEME_PRESETS[0];
   const currentAccent = settings.accentColor || activePreset.accent;
   const currentBg = settings.customBg || activePreset.bg;
-  const currentCard = settings.customCard || activePreset.card;
 
   const contrastScore = calcContrast(currentAccent, currentBg);
-
-  const filteredLibraryPalettes = COLOR_PALETTES.filter((pal) => {
-    if (paletteFilter === 'dark' && pal.isLight) return false;
-    if (paletteFilter === 'light' && !pal.isLight) return false;
-    if (['cyber', 'luxury', 'ocean', 'nature', 'warm'].includes(paletteFilter) && pal.category !== paletteFilter) return false;
-    if (paletteSearch.trim()) {
-      const q = paletteSearch.toLowerCase();
-      const hay = `${pal.name} ${pal.category} ${(pal.tags || []).join(' ')}`.toLowerCase();
-      if (!hay.includes(q)) return false;
-    }
-    return true;
-  });
 
   return (
     <div className="crm-settings-page-redesign crm-settings-page crm-settings-form">
@@ -260,16 +212,21 @@ export default function CrmSettingsTab({ showNotification }) {
       </header>
 
       {/* ── Coolors-Style Dynamic Color Generator ───────────────────────────── */}
-      <section className="crm-settings-panel">
+      <details className="crm-settings-panel crm-settings-collapsible">
+        <summary className="crm-settings-accordion-summary">
+          <div className="crm-settings-accordion-title">
+            <h3>Coolors CRM Palette Generator</h3>
+            <span className="crm-badge crm-badge-apple" style={{ background: `${currentAccent}20`, color: currentAccent, border: `1px solid ${currentAccent}40` }}>
+              <Sparkles size={11} style={{ marginRight: 4 }} />
+              Instant Generation
+            </span>
+          </div>
+          <ChevronDown className="crm-settings-accordion-chevron" size={18} aria-hidden="true" />
+        </summary>
+
+        <div className="crm-settings-accordion-scroll">
         <div className="crm-settings-section-head" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <h3 style={{ margin: 0 }}>Coolors CRM Palette Generator</h3>
-              <span className="crm-badge crm-badge-apple" style={{ background: `${currentAccent}20`, color: currentAccent, border: `1px solid ${currentAccent}40` }}>
-                <Sparkles size={11} style={{ marginRight: 4 }} />
-                Instant Generation
-              </span>
-            </div>
             <p>
               Generate mathematical, accessible Apple color harmonies. Press <kbd style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4, fontSize: 11 }}>Spacebar</kbd> or click Generate to create fresh palettes. Lock individual pillars to preserve your favorite tones.
             </p>
@@ -381,13 +338,18 @@ export default function CrmSettingsTab({ showNotification }) {
             Tip: Lock colors with the lock icon, then hit Space to shuffle only unlocked tones.
           </div>
         </div>
-      </section>
+        </div>
+      </details>
 
       {/* ── Visual Themes (Apple Gray Default) ────────────────────────────── */}
-      <section className="crm-settings-panel">
+      <details className="crm-settings-panel crm-settings-collapsible">
+        <summary className="crm-settings-accordion-summary">
+          <h3>Visual Themes</h3>
+          <ChevronDown className="crm-settings-accordion-chevron" size={18} aria-hidden="true" />
+        </summary>
+        <div className="crm-settings-accordion-scroll">
         <div className="crm-settings-section-head">
           <div>
-            <h3>Visual Themes</h3>
             <p>
               Curated Apple aesthetics tuned for high legibility, reduced eye strain, and fluid clarity. The default Apple Space Gray restores the iconic dark gray palette.
             </p>
@@ -478,13 +440,18 @@ export default function CrmSettingsTab({ showNotification }) {
             );
           })}
         </div>
-      </section>
+        </div>
+      </details>
 
       {/* ── Accent Colors & Swatches ───────────────────────────────────────── */}
-      <section className="crm-settings-panel">
+      <details className="crm-settings-panel crm-settings-collapsible">
+        <summary className="crm-settings-accordion-summary">
+          <h3>Accent Tint & Swatches</h3>
+          <ChevronDown className="crm-settings-accordion-chevron" size={18} aria-hidden="true" />
+        </summary>
+        <div className="crm-settings-accordion-scroll">
         <div className="crm-settings-section-head">
           <div>
-            <h3>Accent Tint & Swatches</h3>
             <p>
               Select an accent color or input a custom hex value. It is used for primary actions, active navigation, and badges.
             </p>
@@ -561,91 +528,8 @@ export default function CrmSettingsTab({ showNotification }) {
             </div>
           </label>
         </div>
-      </section>
-
-      {/* ── Coolors Palette Library (same engine as Site Settings) ───────── */}
-      <section className="crm-settings-panel">
-        <div className="crm-settings-section-head">
-          <div>
-            <h3>Color Palette Library</h3>
-            <p>
-              The same Coolors-style library as Site Settings — curated greys, themes, and generated harmonies. Apply any palette to the entire CRM chrome.
-            </p>
-          </div>
         </div>
-
-        <div className="crm-palette-toolbar">
-          <div className="crm-ios-segmented">
-            {[
-              ['all', 'All'],
-              ['dark', 'Dark Gray'],
-              ['light', 'Light'],
-              ['luxury', 'Luxury'],
-              ['ocean', 'Ocean'],
-              ['nature', 'Nature'],
-              ['warm', 'Warm'],
-              ['cyber', 'Cyber'],
-            ].map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                className={paletteFilter === id ? 'is-selected' : ''}
-                onClick={() => setPaletteFilter(id)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <label className="crm-palette-search">
-            <Search size={14} />
-            <input
-              type="search"
-              value={paletteSearch}
-              onChange={(e) => setPaletteSearch(e.target.value)}
-              placeholder="Search palettes…"
-              className="crm-settings-input"
-            />
-          </label>
-        </div>
-
-        <div className="crm-palette-library-grid">
-          {filteredLibraryPalettes.map((pal) => {
-            const isActive = (settings.customBg || '').toLowerCase() === pal.bg.toLowerCase()
-              && (settings.accentColor || '').toLowerCase() === pal.primary.toLowerCase();
-            return (
-              <article key={pal.id} className={`crm-palette-card ${isActive ? 'is-active' : ''}`}>
-                <div className="crm-palette-card-meta">
-                  <div>
-                    <div className="crm-palette-card-name">{pal.name}</div>
-                    <span className={`crm-palette-card-badge ${pal.isLight ? 'light' : 'dark'}`}>
-                      {pal.isLight ? 'Light' : 'Dark'} · {pal.category}
-                    </span>
-                  </div>
-                </div>
-                <div className="crm-palette-swatch-strip" aria-hidden="true">
-                  <span style={{ background: pal.primary }} title={pal.primary} />
-                  <span style={{ background: pal.bg }} title={pal.bg} />
-                  <span style={{ background: pal.card }} title={pal.card} />
-                  <span style={{ background: pal.accent }} title={pal.accent} />
-                  <span style={{ background: pal.secondary }} title={pal.secondary} />
-                </div>
-                <div className="crm-palette-card-actions">
-                  <button type="button" className="crm-btn-primary" onClick={() => applyLibraryPalette(pal)}>
-                    Apply
-                  </button>
-                  <button type="button" className="crm-btn-secondary" onClick={() => copyLibraryPalette(pal)}>
-                    {copiedPaletteId === pal.id ? <Check size={12} /> : <Copy size={12} />}
-                    {copiedPaletteId === pal.id ? 'Copied' : 'Copy'}
-                  </button>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-        {filteredLibraryPalettes.length === 0 && (
-          <div className="crm-palette-empty">No palettes match this filter.</div>
-        )}
-      </section>
+      </details>
 
       {/* ── Layout Density & Geometry ───────────────────────────────────────── */}
       <section className="crm-settings-panel">
@@ -713,124 +597,6 @@ export default function CrmSettingsTab({ showNotification }) {
         </div>
       </section>
 
-      {/* ── Live Apple iOS CRM Interactive Preview ─────────────────────────── */}
-      <section className="crm-settings-panel">
-        <div className="crm-settings-section-head">
-          <div>
-            <h3>Live CRM Preview</h3>
-            <p>
-              Real-time render of backoffice buttons, KPI stat widgets, status badges, and table elements matching your settings.
-            </p>
-          </div>
-        </div>
-
-        <div
-          className="crm-preview-box"
-          style={{
-            background: currentBg,
-            borderColor: 'var(--crm-border)',
-            borderRadius: settings.radius === 'ios-modern' ? 16 : 8,
-          }}
-        >
-          {/* Mock SuperAdmin bar */}
-          <div className="crm-preview-nav" style={{ background: currentCard }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div className="crm-preview-logo" style={{ background: currentAccent }}>
-                CDX
-              </div>
-              <span style={{ fontWeight: 600, fontSize: 13 }}>Codex Backoffice</span>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <span className="crm-preview-tab is-active" style={{ color: currentAccent, borderColor: currentAccent }}>
-                Leads
-              </span>
-              <span className="crm-preview-tab">Enquiries</span>
-              <span className="crm-preview-tab">Content</span>
-              <span className="crm-preview-tab">Live Chat</span>
-              <span className="crm-preview-tab">Site Settings</span>
-            </div>
-          </div>
-
-          {/* Mock KPI Row */}
-          <div className="crm-preview-body">
-            <div className="crm-preview-kpi-grid">
-              <div className="crm-preview-kpi-card" style={{ background: currentCard }}>
-                <span className="crm-preview-kpi-label">Active Leads</span>
-                <span className="crm-preview-kpi-value" style={{ color: currentAccent }}>142</span>
-                <span className="crm-preview-kpi-sub">↑ 12% this week</span>
-              </div>
-              <div className="crm-preview-kpi-card" style={{ background: currentCard }}>
-                <span className="crm-preview-kpi-label">New Enquiries</span>
-                <span className="crm-preview-kpi-value" style={{ color: '#30D158' }}>28</span>
-                <span className="crm-preview-kpi-sub">4 awaiting callback</span>
-              </div>
-              <div className="crm-preview-kpi-card" style={{ background: currentCard }}>
-                <span className="crm-preview-kpi-label">Conversion Rate</span>
-                <span className="crm-preview-kpi-value" style={{ color: '#FF9F0A' }}>18.4%</span>
-                <span className="crm-preview-kpi-sub">Top Tier Target</span>
-              </div>
-            </div>
-
-            {/* Mock Table snippet */}
-            <div className="crm-preview-table-card" style={{ background: currentCard }}>
-              <div className="crm-preview-table-head">
-                <span>Client Name</span>
-                <span>Country</span>
-                <span>Stage</span>
-                <span>Service</span>
-                <span>Action</span>
-              </div>
-              <div className="crm-preview-table-row">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div className="crm-preview-avatar" style={{ background: `linear-gradient(135deg, ${currentAccent}, #5E5CE6)` }}>
-                    EV
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>Eleanor Vance</div>
-                    <div style={{ fontSize: 11, color: 'var(--crm-text-secondary)' }}>Vance Tech Capital</div>
-                  </div>
-                </div>
-                <span>🇬🇧 United Kingdom</span>
-                <div>
-                  <span className="crm-badge crm-badge-primary" style={{ background: `${currentAccent}22`, color: currentAccent }}>
-                    Deposit
-                  </span>
-                </div>
-                <span>High-Performance Portal</span>
-                <div>
-                  <button type="button" className="crm-btn-primary" style={{ background: currentAccent, color: '#FFFFFF', borderColor: currentAccent }}>
-                    Open Profile
-                  </button>
-                </div>
-              </div>
-
-              <div className="crm-preview-table-row">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div className="crm-preview-avatar" style={{ background: 'linear-gradient(135deg, #30D158, #00C7BE)' }}>
-                    MB
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>Marcus Brody</div>
-                    <div style={{ fontSize: 11, color: 'var(--crm-text-secondary)' }}>Brody Luxury Goods</div>
-                  </div>
-                </div>
-                <span>🇩🇪 Germany</span>
-                <div>
-                  <span className="crm-badge crm-badge-success" style={{ background: 'rgba(48,209,88,0.15)', color: '#30D158' }}>
-                    New Intake
-                  </span>
-                </div>
-                <span>Bespoke Web Design</span>
-                <div>
-                  <button type="button" className="crm-btn-secondary">
-                    View Scope
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }
