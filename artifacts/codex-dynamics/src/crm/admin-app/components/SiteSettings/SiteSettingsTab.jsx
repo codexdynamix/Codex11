@@ -448,7 +448,7 @@ export default function SiteSettingsTab({ showNotification = () => {} }) {
       fontFamily: localCfg.theme?.fontFamily || 'system',
       headerStyle: localCfg.theme?.headerStyle || 'floating',
       heroLayout: localCfg.theme?.heroLayout || 'streamer',
-      cardStyle: localCfg.theme?.cardStyle || 'glass',
+      cardStyle: localCfg.theme?.cardStyle === 'glass' ? 'bordered' : localCfg.theme?.cardStyle || 'bordered',
 
       // Contacts list
       socialContacts: Array.isArray(localCfg.socialContacts) && localCfg.socialContacts.length > 0
@@ -625,7 +625,7 @@ export default function SiteSettingsTab({ showNotification = () => {} }) {
         fontFamily: configToSync.fontFamily,
         headerStyle: configToSync.headerStyle,
         heroLayout: configToSync.heroLayout || 'streamer',
-        cardStyle: configToSync.cardStyle || 'glass',
+        cardStyle: configToSync.cardStyle === 'glass' ? 'bordered' : configToSync.cardStyle || 'bordered',
         sectionsOrder: configToSync.sectionsOrder,
         sectionsVisibility: configToSync.sectionsVisibility,
         layout: {
@@ -633,7 +633,7 @@ export default function SiteSettingsTab({ showNotification = () => {} }) {
           sectionVisibility: configToSync.sectionsVisibility,
           sectionsVisibility: configToSync.sectionsVisibility,
           heroLayout: configToSync.heroLayout || 'streamer',
-          cardStyle: configToSync.cardStyle || 'glass',
+          cardStyle: configToSync.cardStyle === 'glass' ? 'bordered' : configToSync.cardStyle || 'bordered',
         }
       },
       socialContacts: configToSync.socialContacts,
@@ -714,7 +714,7 @@ export default function SiteSettingsTab({ showNotification = () => {} }) {
       cardBg: preset.card,
       heroLayout: preset.heroLayout || 'streamer',
       headerStyle: preset.headerStyle || 'floating',
-      cardStyle: preset.cardStyle || 'glass',
+      cardStyle: preset.cardStyle === 'glass' ? 'bordered' : preset.cardStyle || 'bordered',
       fontFamily: preset.fontFamily || 'system',
       borderRadius: preset.borderRadius || 'clean',
       sectionsOrder: preset.sectionsOrder || prev.sectionsOrder || DEFAULT_SECTIONS.map((s) => s.id),
@@ -1255,7 +1255,7 @@ export default function SiteSettingsTab({ showNotification = () => {} }) {
           fontFamily: siteConfig.fontFamily,
           headerStyle: siteConfig.headerStyle,
           heroLayout: siteConfig.heroLayout || 'streamer',
-          cardStyle: siteConfig.cardStyle || 'glass',
+          cardStyle: siteConfig.cardStyle === 'glass' ? 'bordered' : siteConfig.cardStyle || 'bordered',
           sectionsOrder: siteConfig.sectionsOrder,
           sectionsVisibility: siteConfig.sectionsVisibility
         },

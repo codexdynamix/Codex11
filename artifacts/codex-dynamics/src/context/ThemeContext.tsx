@@ -39,7 +39,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         }
       }
     } catch {}
-    return "light";
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   });
 
   const applyThemeToDom = useCallback((newTheme: Theme) => {
@@ -68,8 +68,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [applyThemeToDom]);
 
   const toggleTheme = useCallback(() => {
-    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
-  }, [setTheme]);
+    setTheme(theme === "dark" ? "light" : "dark");
+  }, [setTheme, theme]);
 
   useEffect(() => {
     applyThemeToDom(theme);

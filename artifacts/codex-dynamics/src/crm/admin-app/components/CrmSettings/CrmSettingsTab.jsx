@@ -49,8 +49,8 @@ export default function CrmSettingsTab({ showNotification }) {
   const [palettePillars, setPalettePillars] = useState(() => [
     { id: 'accent', label: 'Primary Accent', hex: '#0A84FF', locked: false, desc: 'Action buttons & pills' },
     { id: 'bg', label: 'Canvas Background', hex: '#16171B', locked: false, desc: 'Apple dark gray base' },
-    { id: 'card', label: 'Card Surface', hex: '#23242A', locked: false, desc: 'Translucent iOS cards' },
-    { id: 'glow', label: 'Highlight Glow', hex: '#64D2FF', locked: false, desc: 'Borders & active badges' },
+    { id: 'card', label: 'Card Surface', hex: '#23242A', locked: false, desc: 'Solid panels' },
+    { id: 'glow', label: 'Accent Detail', hex: '#64D2FF', locked: false, desc: 'Active badges' },
     { id: 'secondary', label: 'Secondary Gray', hex: '#2D2F36', locked: false, desc: 'Hover states & inputs' },
   ]);
 
@@ -145,7 +145,7 @@ export default function CrmSettingsTab({ showNotification }) {
       { id: 'accent', label: 'Primary Accent', hex: palette.primary, locked: false, desc: 'Action buttons & pills' },
       { id: 'bg', label: 'Canvas Background', hex: palette.bg, locked: false, desc: 'Apple gray base' },
       { id: 'card', label: 'Card Surface', hex: palette.card, locked: false, desc: 'Elevated panels' },
-      { id: 'glow', label: 'Highlight Glow', hex: palette.accent, locked: false, desc: 'Active badges' },
+      { id: 'glow', label: 'Accent Detail', hex: palette.accent, locked: false, desc: 'Active badges' },
       { id: 'secondary', label: 'Secondary Gray', hex: palette.secondary, locked: false, desc: 'Hover & borders' },
     ]);
     setSaved(false);
@@ -173,7 +173,7 @@ export default function CrmSettingsTab({ showNotification }) {
       { id: 'accent', label: 'Primary Accent', hex: preset.accent, locked: false, desc: 'Action buttons & pills' },
       { id: 'bg', label: 'Canvas Background', hex: preset.bg, locked: false, desc: 'Base surface' },
       { id: 'card', label: 'Card Surface', hex: preset.card, locked: false, desc: 'Card elevation' },
-      { id: 'glow', label: 'Highlight Glow', hex: preset.accentHover || preset.accent, locked: false, desc: 'Active badges' },
+      { id: 'glow', label: 'Accent Detail', hex: preset.accentHover || preset.accent, locked: false, desc: 'Active badges' },
       { id: 'secondary', label: 'Secondary Gray', hex: preset.cardHover || '#2D2F36', locked: false, desc: 'Hover & borders' },
     ]);
     setSaved(false);
@@ -204,8 +204,8 @@ export default function CrmSettingsTab({ showNotification }) {
     setPalettePillars([
       { id: 'accent', label: 'Primary Accent', hex: '#0A84FF', locked: false, desc: 'Action buttons & pills' },
       { id: 'bg', label: 'Canvas Background', hex: '#16171B', locked: false, desc: 'Apple dark gray base' },
-      { id: 'card', label: 'Card Surface', hex: '#23242A', locked: false, desc: 'Translucent iOS cards' },
-      { id: 'glow', label: 'Highlight Glow', hex: '#64D2FF', locked: false, desc: 'Borders & active badges' },
+    { id: 'card', label: 'Card Surface', hex: '#23242A', locked: false, desc: 'Solid panels' },
+    { id: 'glow', label: 'Accent Detail', hex: '#64D2FF', locked: false, desc: 'Active badges' },
       { id: 'secondary', label: 'Secondary Gray', hex: '#2D2F36', locked: false, desc: 'Hover states & inputs' },
     ]);
     setSaved(true);
@@ -486,7 +486,7 @@ export default function CrmSettingsTab({ showNotification }) {
           <div>
             <h3>Accent Tint & Swatches</h3>
             <p>
-              Select an Apple signature accent color or input a custom hex value. This color lights up action buttons, active navigation indicators, and primary badges.
+              Select an accent color or input a custom hex value. It is used for primary actions, active navigation, and badges.
             </p>
           </div>
         </div>

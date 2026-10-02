@@ -44,7 +44,7 @@ export function RootShell() {
             offset={56}
             toastOptions={{
               style: {
-                background: "var(--color-paper)",
+                background: "var(--color-popover)",
                 border: "1px solid var(--color-hairline)",
                 color: "var(--color-label)",
                 borderRadius: "12px",

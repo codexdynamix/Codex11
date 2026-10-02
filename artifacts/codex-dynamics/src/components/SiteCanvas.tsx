@@ -1,7 +1,8 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { useSiteConfig } from "@/context/SiteConfigContext";
-import { buildThemeStyle, isDarkHex } from "@/lib/theme-engine";
+import { useTheme } from "@/context/ThemeContext";
+import { buildThemeStyle } from "@/lib/theme-engine";
 
 function CustomCodeContainer({
   html,
@@ -68,13 +69,15 @@ export function SiteCanvas({
   className?: string;
 }) {
   const { config } = useSiteConfig();
+  const { theme: displayMode } = useTheme();
   const theme = config.theme;
   const themeId = theme?.activeTheme || "codex-pro";
   const header = theme?.headerStyle || "floating";
   const hero = theme?.heroLayout || theme?.layout?.heroLayout || "streamer";
-  const cards = theme?.cardStyle || theme?.layout?.cardStyle || "glass";
+  const configuredCardStyle = theme?.cardStyle || theme?.layout?.cardStyle;
+  const cards = configuredCardStyle === "glass" ? "bordered" : configuredCardStyle || "bordered";
   const scale = theme?.fontSizeScale || theme?.layout?.fontSizeScale || "normal";
-  const isDark = isDarkHex(config.colors?.background);
+  const isDark = displayMode === "dark";
 
   return (
     <div
@@ -89,7 +92,7 @@ export function SiteCanvas({
       data-type-scale={scale}
       data-preview={preview ? "true" : undefined}
       data-theme={isDark ? "dark" : "light"}
-      style={buildThemeStyle(config)}
+      style={buildThemeStyle(config, displayMode)}
     >
       {theme?.customCss ? <style data-theme-css>{theme.customCss}</style> : null}
       <CustomCodeContainer

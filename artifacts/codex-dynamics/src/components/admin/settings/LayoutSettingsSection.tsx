@@ -145,7 +145,7 @@ const TEMPLATE_PRESETS = [
     id: "titanium-light",
     name: "Titanium Apple Light",
     badge: "Clean Minimal",
-    desc: "Crisp architectural light mode with frosted glass cards and Apple-grade precision",
+    desc: "Crisp light mode with solid, clearly separated surfaces, a centered hero, and precise typography",
     primary: "#0071E3",
     secondary: "#F2F2F7",
     accent: "#0071E3",

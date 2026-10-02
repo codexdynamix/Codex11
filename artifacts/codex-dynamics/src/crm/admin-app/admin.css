@@ -13,19 +13,19 @@
 
   .crm-admin-app {
     /* ── Canonical Apple Space Gray tokens (overridden by CRM Settings) ── */
-    --crm-bg: #16171B;
-    --crm-card: #23242A;
-    --crm-card-hover: #2D2F36;
-    --crm-border: rgba(255, 255, 255, 0.08);
-    --crm-border-hover: rgba(255, 255, 255, 0.16);
-    --crm-text-primary: #FFFFFF;
-    --crm-text-secondary: #8E8E93;
-    --crm-text-muted: #636366;
-    --crm-input-bg: rgba(255, 255, 255, 0.06);
-    --crm-accent: #0A84FF;
+    --crm-bg: #1C1C1E;
+    --crm-card: #242426;
+    --crm-card-hover: #2C2C2E;
+    --crm-border: rgba(255, 255, 255, 0.14);
+    --crm-border-hover: rgba(255, 255, 255, 0.22);
+    --crm-text-primary: #F5F5F7;
+    --crm-text-secondary: #B0B0B5;
+    --crm-text-muted: #929298;
+    --crm-input-bg: #1C1C1E;
+    --crm-accent: #0071E3;
     --crm-accent-hover: #0071E3;
-    --crm-radius: 14px;
-    --crm-radius-sm: 8px;
+    --crm-radius: 8px;
+    --crm-radius-sm: 4px;
     --crm-accent-fg: #FFFFFF;
 
     /* Surfaces - Apple Dark Gray */
@@ -12800,6 +12800,120 @@
 .crm-admin-app .crm-super-admin-btn:not(.crm-super-admin-btn-secondary):not(.crm-super-admin-btn-delete):not(.crm-btn-delete) {
   background: var(--crm-accent) !important;
   color: var(--crm-accent-fg, #fff) !important;
+}
+
+/* Mode-safe, solid CRM surfaces. Keep this after legacy component rules so
+   dark-only defaults cannot wash out the light palette. */
+.crm-admin-app[data-crm-mode] {
+  background: var(--crm-bg) !important;
+  color: var(--crm-text-primary) !important;
+}
+
+.crm-admin-app[data-crm-mode="light"] {
+  color-scheme: light;
+}
+
+.crm-admin-app[data-crm-mode="dark"] {
+  color-scheme: dark;
+}
+
+.crm-admin-app[data-crm-mode] :where(
+  .crm-app-shell,
+  .crm-topbar,
+  .crm-body-grid,
+  .crm-sidebar,
+  .crm-main-content,
+  .crm-main-panel,
+  .crm-super-admin-panel,
+  .crm-super-admin-container,
+  .crm-card,
+  .crm-super-admin-card,
+  .crm-stat-card,
+  .crm-modal-content,
+  .crm-modal-overlay .crm-modal-content,
+  .crm-site-settings-header,
+  .crm-content-hub-header,
+  .crm-proj-header,
+  .crm-chat-console,
+  .crm-chat-sidebar,
+  .crm-chat-main,
+  .crm-chat-meta-standalone,
+  .crm-enquiry-detail-modal,
+  .crm-table-wrap,
+  .crm-table-card
+) {
+  background-color: var(--crm-card) !important;
+  border-color: var(--crm-border) !important;
+  color: var(--crm-text-primary) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.crm-admin-app[data-crm-mode] :where(
+  .crm-app-shell,
+  .crm-body-grid,
+  .crm-sidebar,
+  .crm-main-content,
+  .crm-main-panel,
+  .crm-super-admin-panel,
+  .crm-super-admin-container
+) {
+  background-color: var(--crm-bg) !important;
+}
+
+.crm-admin-app[data-crm-mode] :where(
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea,
+  .crm-input,
+  .crm-super-admin-input
+) {
+  background-color: var(--crm-input-bg) !important;
+  border-color: var(--crm-border) !important;
+  color: var(--crm-text-primary) !important;
+}
+
+.crm-admin-app[data-crm-mode] :where(input, select, textarea)::placeholder {
+  color: var(--crm-text-muted) !important;
+  opacity: 1;
+}
+
+.crm-admin-app[data-crm-mode] :where(
+  .crm-sidebar-subhead,
+  .crm-sidebar-note,
+  .crm-card-subtitle,
+  .crm-muted,
+  .crm-text-muted,
+  .crm-secondary-text
+) {
+  color: var(--crm-text-secondary) !important;
+}
+
+.crm-admin-app[data-crm-mode] :focus-visible {
+  outline: 2px solid var(--crm-accent) !important;
+  outline-offset: 2px;
+  box-shadow: none !important;
+}
+
+.crm-admin-app[data-crm-mode] *,
+.crm-admin-app[data-crm-mode] *::before,
+.crm-admin-app[data-crm-mode] *::after {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+  box-shadow: none !important;
+}
+
+.crm-admin-app[data-crm-mode] .crm-search-suggest,
+.crm-admin-app[data-crm-mode] .crm-dropdown-menu,
+.crm-admin-app[data-crm-mode] .crm-popover,
+.crm-admin-app[data-crm-mode] .crm-select-menu {
+  background: var(--crm-card) !important;
+  border: 1px solid var(--crm-border) !important;
+  color: var(--crm-text-primary) !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14) !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

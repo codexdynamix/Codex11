@@ -1,0 +1,1 @@
+- [Cross-mode visual direction](cross-mode-visual-direction.md) — prefer opaque, calm surfaces and readable contrast; avoid glass blur and decorative glow.
