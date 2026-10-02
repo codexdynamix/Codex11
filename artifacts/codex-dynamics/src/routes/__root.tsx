@@ -12,15 +12,23 @@ const CodexDynamicsAdminApp = lazy(() => import("@/crm/admin-app/App.jsx"));
 const ClientPortalApp = lazy(() => import("@/portal/ClientPortalApp").then(m => ({ default: m.ClientPortalApp })));
 
 export function RootShell() {
-  const [mounted, setMounted] = useState(false);
+  const [currentPathname, setCurrentPathname] = useState(() => {
+    return typeof window !== "undefined" ? window.location.pathname : "/";
+  });
 
   useEffect(() => {
-    setMounted(true);
+    const handleLocationChange = () => {
+      setCurrentPathname(window.location.pathname);
+    };
+    window.addEventListener("popstate", handleLocationChange);
+    return () => {
+      window.removeEventListener("popstate", handleLocationChange);
+    };
   }, []);
 
-  const pathname = typeof window !== "undefined" ? window.location.pathname : "/";
-  const isAdminPath = mounted && pathname.startsWith("/admin");
-  const isPortalPath = mounted && pathname.startsWith("/portal");
+  const pathname = typeof window !== "undefined" ? window.location.pathname : currentPathname;
+  const isAdminPath = pathname.startsWith("/admin");
+  const isPortalPath = pathname.startsWith("/portal") || pathname.startsWith("/client");
   const relativePath = pathname.startsWith("/admin") ? pathname.slice("/admin".length) || "/" : "/";
   const initialEntry = `${relativePath}${typeof window !== "undefined" ? window.location.search : ""}`;
 

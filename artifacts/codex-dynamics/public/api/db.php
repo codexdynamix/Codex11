@@ -1,0 +1,358 @@
+<?php
+/**
+ * Codex Dynamics - Database Connection & Schema Layer
+ * Designed for Hostinger Shared Hosting (PHP 8.0+ / SQLite PDO & MySQL PDO)
+ */
+
+declare(strict_types=1);
+
+// Error handling & headers
+ini_set('display_errors', '0');
+error_reporting(E_ALL);
+
+function jsonResponse(mixed $data, int $status = 200): void {
+    http_response_code($status);
+    header('Content-Type: application/json; charset=utf-8');
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+    echo json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    jsonResponse(['ok' => true]);
+}
+
+function getDb(): PDO {
+    static $pdo = null;
+    if ($pdo !== null) {
+        return $pdo;
+    }
+
+    $dbHost = getenv('DB_HOST') ?: null;
+    $dbName = getenv('DB_NAME') ?: null;
+    $dbUser = getenv('DB_USER') ?: null;
+    $dbPass = getenv('DB_PASS') ?: '';
+
+    // Check optional custom config file
+    $configFile = __DIR__ . '/config.php';
+    if (file_exists($configFile)) {
+        $cfg = require $configFile;
+        if (!empty($cfg['db_host'])) $dbHost = $cfg['db_host'];
+        if (!empty($cfg['db_name'])) $dbName = $cfg['db_name'];
+        if (!empty($cfg['db_user'])) $dbUser = $cfg['db_user'];
+        if (isset($cfg['db_pass'])) $dbPass = $cfg['db_pass'];
+    }
+
+    if ($dbHost && $dbName && $dbUser) {
+        // MySQL connection
+        $dsn = "mysql:host={$dbHost};dbname={$dbName};charset=utf8mb4";
+        $pdo = new PDO($dsn, $dbUser, $dbPass, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false,
+        ]);
+    } else {
+        // SQLite fallback - zero-config for Hostinger
+        $dataDir = __DIR__ . '/data';
+        if (!is_dir($dataDir)) {
+            @mkdir($dataDir, 0755, true);
+        }
+        $sqliteFile = $dataDir . '/codex.sqlite';
+        $pdo = new PDO("sqlite:{$sqliteFile}", null, null, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]);
+        $pdo->exec('PRAGMA journal_mode = WAL;');
+        $pdo->exec('PRAGMA foreign_keys = ON;');
+    }
+
+    initSchema($pdo);
+    return $pdo;
+}
+
+function initSchema(PDO $pdo): void {
+    // 1. Leads Table
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS leads (
+            id TEXT PRIMARY KEY,
+            first_name TEXT,
+            last_name TEXT,
+            name TEXT,
+            email TEXT,
+            phone TEXT,
+            country TEXT DEFAULT 'United Kingdom',
+            country_code TEXT DEFAULT 'GB',
+            stage TEXT DEFAULT 'New',
+            status TEXT DEFAULT 'New',
+            funnel TEXT DEFAULT 'General',
+            company TEXT,
+            service TEXT,
+            budget TEXT,
+            timeline TEXT,
+            message TEXT,
+            source TEXT DEFAULT 'direct',
+            notes TEXT,
+            client_password TEXT,
+            assigned_office_id TEXT,
+            assigned_team_id TEXT,
+            assigned_agent_id TEXT,
+            assigned_by TEXT,
+            is_online INTEGER DEFAULT 0,
+            comment_history TEXT,
+            status_history TEXT,
+            appointments TEXT,
+            activity_record TEXT,
+            created_at TEXT,
+            updated_at TEXT
+        );
+    ");
+
+    // 2. Clients / Users Table
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS portal_clients (
+            id TEXT PRIMARY KEY,
+            name TEXT,
+            company TEXT,
+            email TEXT UNIQUE,
+            password TEXT,
+            phone TEXT,
+            address TEXT,
+            country TEXT DEFAULT 'United Kingdom',
+            country_code TEXT DEFAULT 'GB',
+            status TEXT DEFAULT 'Active',
+            portal_enabled INTEGER DEFAULT 1,
+            tier TEXT DEFAULT 'Enterprise Partner',
+            last_login_at TEXT,
+            created_at TEXT
+        );
+    ");
+
+    // 3. Notifications Table
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS notifications (
+            id TEXT PRIMARY KEY,
+            user_id TEXT, -- NULL means broadcast to all clients
+            title TEXT,
+            description TEXT,
+            kind TEXT DEFAULT 'info',
+            type TEXT DEFAULT 'project',
+            is_read INTEGER DEFAULT 0,
+            link TEXT,
+            sent_by TEXT DEFAULT 'Admin',
+            created_at TEXT
+        );
+    ");
+
+    // 4. Chat Messages Table
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS messages (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            sender TEXT NOT NULL, -- 'agent' or 'client'
+            sender_name TEXT,
+            body TEXT NOT NULL,
+            attachment_name TEXT,
+            attachment_path TEXT,
+            is_read INTEGER DEFAULT 0,
+            created_at TEXT
+        );
+    ");
+
+    // 5. Audit Log (Activity) Table
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS audit_logs (
+            id TEXT PRIMARY KEY,
+            user_id TEXT,
+            client_name TEXT,
+            action TEXT NOT NULL,
+            details TEXT,
+            ip_address TEXT,
+            created_at TEXT
+        );
+    ");
+
+    // 6. Portfolio Projects Table
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            site_name TEXT,
+            site_url TEXT,
+            description TEXT,
+            category TEXT DEFAULT 'Websites & Web Apps',
+            image_url TEXT,
+            is_published INTEGER DEFAULT 1,
+            created_at TEXT
+        );
+    ");
+
+    // 7. Blog Posts Table
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS blogs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            slug TEXT UNIQUE,
+            content TEXT,
+            excerpt TEXT,
+            category TEXT DEFAULT 'Engineering',
+            author TEXT DEFAULT 'Codex Team',
+            status TEXT DEFAULT 'published',
+            featured_image TEXT,
+            meta_description TEXT,
+            reading_time INTEGER DEFAULT 5,
+            created_at TEXT,
+            updated_at TEXT
+        );
+    ");
+
+    // 8. Reviews Table
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS reviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            author TEXT NOT NULL,
+            rating INTEGER DEFAULT 5,
+            comment TEXT,
+            is_published INTEGER DEFAULT 1,
+            created_at TEXT
+        );
+    ");
+
+    // 9. Backlinks Table
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS backlinks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            url TEXT NOT NULL,
+            notes TEXT,
+            created_at TEXT
+        );
+    ");
+
+    seedInitialData($pdo);
+}
+
+function seedInitialData(PDO $pdo): void {
+    // Seed Clients if empty
+    $count = (int)$pdo->query("SELECT COUNT(*) FROM portal_clients")->fetchColumn();
+    if ($count === 0) {
+        $now = date('c');
+        $stmt = $pdo->prepare("
+            INSERT INTO portal_clients (id, name, company, email, password, phone, address, country, country_code, status, portal_enabled, tier, last_login_at, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', 1, ?, ?, ?)
+        ");
+        $stmt->execute([
+            'client_vance',
+            'Eleanor Vance',
+            'Vance Tech Capital',
+            'eleanor.vance@vancetech.io',
+            'client123',
+            '+1 (415) 890-2341',
+            '450 Mission St, Suite 1800, San Francisco, CA 94105',
+            'United States',
+            'US',
+            'Enterprise Partner',
+            date('c', time() - 3600),
+            $now
+        ]);
+        $stmt->execute([
+            'client_brody',
+            'Marcus Brody',
+            'Brody Luxury Goods',
+            'marcus@brodydesign.co',
+            'client123',
+            '+44 20 7946 0912',
+            '14 Berkeley Square, Mayfair, London W1J 6BL',
+            'United Kingdom',
+            'GB',
+            'Growth Tier',
+            date('c', time() - 7200),
+            $now
+        ]);
+        $stmt->execute([
+            'usr_client',
+            'Alex Morgan',
+            'Morgan Digital Media',
+            'client@codexdynamics.com',
+            'client123',
+            '+1 (555) 234-5678',
+            '777 Broadway, 12th Floor, New York, NY 10003',
+            'United States',
+            'US',
+            'Dedicated Agency',
+            date('c', time() - 1800),
+            $now
+        ]);
+    }
+
+    // Seed Leads if empty
+    $leadCount = (int)$pdo->query("SELECT COUNT(*) FROM leads")->fetchColumn();
+    if ($leadCount === 0) {
+        $now = date('c');
+        $stmt = $pdo->prepare("
+            INSERT INTO leads (id, first_name, last_name, name, email, phone, country, country_code, stage, status, funnel, company, service, budget, timeline, message, source, notes, client_password, assigned_office_id, assigned_team_id, assigned_agent_id, comment_history, status_history, appointments, activity_record, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ");
+        $stmt->execute([
+            'client_vance',
+            'Eleanor',
+            'Vance',
+            'Eleanor Vance',
+            'eleanor.vance@vancetech.io',
+            '+1 (415) 890-2341',
+            'United States',
+            'US',
+            'New',
+            'New',
+            'High-Performance Website',
+            'Vance Tech Capital',
+            'High-Performance Website',
+            '$15,000 - $25,000',
+            'Within 1 Month',
+            'We need a complete rebuild of our venture fund corporate portal with real-time portfolio performance dashboards and interactive investor LP access.',
+            'website_contact_modal',
+            'High priority lead.',
+            'client123',
+            'of_london',
+            'tm_alpha',
+            'adm_ag',
+            json_encode([['id' => 'c1', 'by_name' => 'Website Intake', 'text' => 'Intake from public modal', 'created_at' => $now]]),
+            json_encode([['id' => 's1', 'from_stage' => 'New', 'to_stage' => 'New', 'by_name' => 'System', 'created_at' => $now]]),
+            json_encode([]),
+            json_encode(['pageViews' => 24, 'sessions' => 6, 'lastLogin' => date('c', time() - 3600)]),
+            $now,
+            $now
+        ]);
+        $stmt->execute([
+            'client_brody',
+            'Marcus',
+            'Brody',
+            'Marcus Brody',
+            'marcus@brodydesign.co',
+            '+44 20 7946 0912',
+            'United Kingdom',
+            'GB',
+            'In Line',
+            'In Line',
+            'Web Design & UI/UX',
+            'Brody Luxury Goods',
+            'Web Design & UI/UX',
+            '$10,000 - $18,000',
+            'Immediate',
+            'Looking for a bespoke e-commerce experience with 3D product previews and ultra-fast mobile checkout.',
+            'website_contact_form',
+            'Waiting for brand pack.',
+            'client123',
+            'of_london',
+            'tm_alpha',
+            'adm_ag',
+            json_encode([]),
+            json_encode([]),
+            json_encode([]),
+            json_encode(['pageViews' => 12, 'sessions' => 3, 'lastLogin' => date('c', time() - 7200)]),
+            $now,
+            $now
+        ]);
+    }
+}

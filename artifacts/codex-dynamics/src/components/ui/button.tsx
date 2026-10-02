@@ -4,14 +4,16 @@ import type { ComponentProps } from "react";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 
+export type ButtonProps = ComponentProps<"button"> &
+  VariantProps<typeof buttonVariants> & { asChild?: boolean };
+
 function Button({
   className,
   variant,
   size,
   asChild = false,
   ...props
-}: ComponentProps<"button"> &
-  VariantProps<typeof buttonVariants> & { asChild?: boolean }) {
+}: ButtonProps) {
   const Comp = asChild ? Slot : "button";
   return (
     <Comp
@@ -22,4 +24,4 @@ function Button({
   );
 }
 
-export { Button };
+export { Button, buttonVariants };

@@ -9,6 +9,8 @@
  * camelCase shape { officeId, teamId } that the CRM panels expect.
  */
 
+import { portalDb } from '../../services/portalDatabase';
+
 const TOKEN_KEY   = 'codex_admin_token';
 const PROFILE_KEY = 'codex_admin_profile';
 const REQUEST_TIMEOUT_MS = 15000;
@@ -579,6 +581,29 @@ function handleLocalMock(path, method, body) {
 }
 
 async function adminFetch(path, { method = 'GET', body } = {}) {
+  const token = getAdminToken();
+  const headers = {
+    Accept: 'application/json',
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (body) headers['Content-Type'] = 'application/json';
+
+  try {
+    const res = await withTimeout(
+      fetch(path, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      }),
+      8000
+    );
+    if (res.ok) {
+      const data = await res.json();
+      return data;
+    }
+  } catch (err) {
+    // Graceful fallback to local mock / local storage
+  }
   return handleLocalMock(path, method, body);
 }
 
@@ -631,17 +656,44 @@ export async function getAdminMessageAttachmentUrl(messageId) {
 export async function getAdminMessages(userId, { before, limit = 100 } = {}) {
   const empty = { user: null, messages: [], unreadCount: 0, hasMore: false };
   if (!userId) return empty;
+
+  // Local portalDb direct chat messages
+  const localDirect = (portalDb.getDirectChatMessages(userId) || []).map((m) => ({
+    id: m.id,
+    sender: m.sender === 'staff' ? 'agent' : 'client',
+    text: m.text,
+    body: m.text,
+    timestamp: m.createdAt,
+    createdAt: m.createdAt,
+    readAt: null,
+    agentId: null,
+    attachment: null,
+  }));
+
   const qs = new URLSearchParams({ user_id: userId, limit: String(limit) });
   if (before) qs.set('before', before);
   try {
     const data = await adminFetch(`/api/admin/messages?${qs.toString()}`);
+    const remote = Array.isArray(data?.messages) ? data.messages.map(mapAdminMessage) : [];
+    const seen = new Set();
+    const merged = [];
+    for (const m of [...localDirect, ...remote]) {
+      if (!seen.has(m.id)) {
+        seen.add(m.id);
+        merged.push(m);
+      }
+    }
+    merged.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
     return {
-      user:        data?.user || null,
-      messages:    Array.isArray(data?.messages) ? data.messages.map(mapAdminMessage) : [],
+      user: data?.user || { id: userId },
+      messages: merged,
       unreadCount: Number(data?.unread_count || 0),
-      hasMore:     Boolean(data?.has_more),
+      hasMore: Boolean(data?.has_more),
     };
   } catch (err) {
+    if (localDirect.length > 0) {
+      return { user: { id: userId }, messages: localDirect, unreadCount: 0, hasMore: false };
+    }
     if (err.status === 401 || err.status === 403 || err.status === 404) return empty;
     throw err;
   }
@@ -649,11 +701,31 @@ export async function getAdminMessages(userId, { before, limit = 100 } = {}) {
 
 export async function sendAdminMessage(userId, text) {
   if (!userId) throw new Error('user_id required');
-  const data = await adminFetch('/api/admin/messages', {
-    method: 'POST',
-    body:   { user_id: userId, body: String(text || '').trim() },
-  });
-  return data?.message ? mapAdminMessage(data.message) : null;
+  const storedProfile = getStoredAdminProfile();
+  const staffName = storedProfile?.name || 'Support Agent';
+
+  // Save to portalDb immediately
+  const localMsg = portalDb.sendDirectChatMessage(userId, String(text || '').trim(), 'staff', staffName);
+
+  try {
+    const data = await adminFetch('/api/admin/messages', {
+      method: 'POST',
+      body: { user_id: userId, body: String(text || '').trim() },
+    });
+    if (data?.message) return mapAdminMessage(data.message);
+  } catch (_) {}
+
+  return {
+    id: localMsg.id,
+    sender: 'agent',
+    text: localMsg.text,
+    body: localMsg.text,
+    timestamp: localMsg.createdAt,
+    createdAt: localMsg.createdAt,
+    readAt: null,
+    agentId: storedProfile?.id || null,
+    attachment: null,
+  };
 }
 
 export async function markAdminMessagesRead(userId) {
@@ -747,6 +819,15 @@ export async function fetchAllLeads(options = {}) {
 export async function sendClientNotificationApi({ userId, message, kind = 'info' }) {
   const body = { message, kind };
   if (userId) body.user_id = userId;
+
+  // Add to portalDb so Client Portal sees it immediately
+  portalDb.addNotification(userId || null, {
+    title: kind === 'billing' ? 'Billing & Invoice Notice' : kind === 'project' ? 'Project Milestone Update' : kind === 'security' ? 'Security Alert' : 'Administrator Notice',
+    description: message,
+    kind,
+    type: kind === 'billing' ? 'invoice' : kind === 'project' ? 'project' : 'support',
+  });
+
   return adminFetch('/api/admin/notifications/send', { method: 'POST', body });
 }
 
@@ -755,14 +836,37 @@ export async function sendClientNotificationApi({ userId, message, kind = 'info'
  * Returns the first 200 active client users matching an optional search term.
  */
 export async function searchClientUsersForNotify(search = '') {
-  const params = new URLSearchParams({ limit: '200' });
-  if (search) params.set('search', search);
+  const cleanSearch = (search || '').toLowerCase().trim();
+  const allClients = portalDb.adminGetAllClients();
+  const localMatched = allClients
+    .filter((c) =>
+      !cleanSearch ||
+      c.name.toLowerCase().includes(cleanSearch) ||
+      c.email.toLowerCase().includes(cleanSearch) ||
+      (c.company && c.company.toLowerCase().includes(cleanSearch)) ||
+      c.id.toLowerCase().includes(cleanSearch)
+    )
+    .map(mapClientUserRow);
+
   try {
+    const params = new URLSearchParams({ limit: '200' });
+    if (search) params.set('search', search);
     const res = await adminFetch(`/api/admin/users?${params.toString()}`);
-    return (res.users || []).map(mapClientUserRow);
-  } catch (_) {
-    return [];
-  }
+    if (res && Array.isArray(res.users) && res.users.length > 0) {
+      const remote = res.users.map(mapClientUserRow);
+      const seen = new Set();
+      const merged = [];
+      for (const u of [...remote, ...localMatched]) {
+        if (u && !seen.has(u.id)) {
+          seen.add(u.id);
+          merged.push(u);
+        }
+      }
+      return merged;
+    }
+  } catch (_) {}
+
+  return localMatched;
 }
 
 /**
@@ -1373,9 +1477,10 @@ export async function listClientUsers({
 }
 
 export async function adminSetClientPassword(userId, newPassword) {
+  portalDb.setClientPassword(userId, newPassword);
   return adminFetch(`/api/admin/users/${userId}/set-password`, {
     method: 'POST',
-    body:   { new_password: newPassword },
+    body: { new_password: newPassword, password: newPassword, client_password: newPassword },
   });
 }
 
@@ -1383,31 +1488,53 @@ export async function getUserProfileHistoryApi(userId, { limit = 50, offset = 0 
   if (!userId) {
     const err = new Error('userId is required'); err.code = 'bad_request'; throw err;
   }
-  const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-  const data = await adminFetch(
-    `/api/admin/users/${encodeURIComponent(userId)}/profile-history?${qs.toString()}`
-  );
-  const actionLabels = {
-    'client.profile_update': 'Profile Updated (Self)',
-    'client.email_change':   'Email Changed (Self)',
-    'client.password_change':'Password Changed (Self)',
-    'client.avatar_upload':  'Profile Photo Updated (Self)',
-    'admin.user_update':     'Profile Edited (Admin)',
-    'admin.password_reset':  'Password Reset (Admin)',
-  };
-  const entries = (data?.entries || []).map((e) => ({
-    id:            e.id,
-    action:        e.action,
-    actionLabel:   actionLabels[e.action] || e.action,
-    before:        e.before,
-    after:         e.after,
-    ip:            e.ip,
-    actorAdminId:  e.actor_admin_id,
-    actorName:     e.actor_admin_name || (e.actor_admin_id ? 'Admin' : 'Client'),
-    actorRole:     e.actor_role,
-    createdAt:     e.created_at,
+
+  // Activity from portalDb
+  const act = portalDb.getClientActivity(userId);
+  const localEntries = (act.logs || []).map((l) => ({
+    id: l.id,
+    action: l.action.toLowerCase(),
+    actionLabel: l.action.replace(/_/g, ' '),
+    before: {},
+    after: { details: l.details },
+    ip: l.ipAddress,
+    actorAdminId: l.action.includes('ADMIN') ? 'adm_sa' : null,
+    actorName: l.clientName || 'Client',
+    actorRole: l.action.includes('ADMIN') ? 'Super Admin' : 'Client',
+    createdAt: l.timestamp,
   }));
-  return { entries, total: data?.total || 0 };
+
+  try {
+    const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    const data = await adminFetch(
+      `/api/admin/users/${encodeURIComponent(userId)}/profile-history?${qs.toString()}`
+    );
+    if (data?.entries && Array.isArray(data.entries) && data.entries.length > 0) {
+      const actionLabels = {
+        'client.profile_update': 'Profile Updated (Self)',
+        'client.email_change':   'Email Changed (Self)',
+        'client.password_change':'Password Changed (Self)',
+        'client.avatar_upload':  'Profile Photo Updated (Self)',
+        'admin.user_update':     'Profile Edited (Admin)',
+        'admin.password_reset':  'Password Reset (Admin)',
+      };
+      const entries = data.entries.map((e) => ({
+        id:            e.id,
+        action:        e.action,
+        actionLabel:   actionLabels[e.action] || e.action,
+        before:        e.before,
+        after:         e.after,
+        ip:            e.ip,
+        actorAdminId:  e.actor_admin_id,
+        actorName:     e.actor_admin_name || (e.actor_admin_id ? 'Admin' : 'Client'),
+        actorRole:     e.actor_role,
+        createdAt:     e.created_at,
+      }));
+      return { entries, total: data?.total || entries.length };
+    }
+  } catch (_) {}
+
+  return { entries: localEntries, total: localEntries.length };
 }
 
 export async function listSignupRequests(status = 'pending') {

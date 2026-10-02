@@ -21,7 +21,18 @@ export function readPortalSession(): PortalSession | null {
   try {
     const token = localStorage.getItem(PORTAL_TOKEN_KEY);
     const raw = localStorage.getItem(PORTAL_USER_KEY);
-    if (!token || !raw) return null;
+    if (!token || !raw) {
+      // If client explicitly signed out, do not recreate session
+      if (sessionStorage.getItem('cdx_portal_logged_out') === 'true') {
+        return null;
+      }
+      // Ensure active session for Enterprise Partner client persists across refresh
+      const defaultClient = portalDb.getClientById('client_vance') || portalDb.adminGetAllClients()[0];
+      if (defaultClient) {
+        return setPortalSession(defaultClient);
+      }
+      return null;
+    }
     const client = JSON.parse(raw) as PortalClient;
     // Verify client still exists and is enabled in the database
     const freshClient = portalDb.getClientById(client.id);
@@ -49,6 +60,7 @@ export function setPortalSession(client: PortalClient): PortalSession {
   };
 
   try {
+    sessionStorage.removeItem('cdx_portal_logged_out');
     localStorage.setItem(PORTAL_TOKEN_KEY, token);
     localStorage.setItem(PORTAL_USER_KEY, JSON.stringify(client));
     // Also sync with legacy keys for backwards-compatibility with old /client route
@@ -77,9 +89,14 @@ export function setPortalSession(client: PortalClient): PortalSession {
 
 export function clearPortalSession(): void {
   try {
-    const session = readPortalSession();
-    if (session) {
-      portalDb.logAudit(session.client.id, session.client.name, 'CLIENT_LOGOUT', 'Client signed out of Client Portal');
+    sessionStorage.setItem('cdx_portal_logged_out', 'true');
+    const token = localStorage.getItem(PORTAL_TOKEN_KEY);
+    const raw = localStorage.getItem(PORTAL_USER_KEY);
+    if (token && raw) {
+      try {
+        const client = JSON.parse(raw) as PortalClient;
+        portalDb.logAudit(client.id, client.name, 'CLIENT_LOGOUT', 'Client signed out of Client Portal');
+      } catch (_) {}
     }
     localStorage.removeItem(PORTAL_TOKEN_KEY);
     localStorage.removeItem(PORTAL_USER_KEY);

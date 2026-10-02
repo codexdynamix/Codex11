@@ -54,6 +54,16 @@ interface AdminSidebarProps {
   onLogout: () => void;
 }
 
+interface SidebarNavItem {
+  id: AdminTabKey;
+  label: string;
+  icon: any;
+  count: number | null;
+  badgeLive: boolean;
+  badgeText: string | null;
+  badgeAlert?: boolean;
+}
+
 export function AdminSidebar({
   activeTab,
   setActiveTab,
@@ -67,7 +77,7 @@ export function AdminSidebar({
   const { config } = useSiteConfig();
   const isMaintenance = Boolean(config.emergency?.maintenanceMode);
 
-  const navSections = [
+  const navSections: { group: string; items: SidebarNavItem[] }[] = [
     {
       group: "Design & Site Customizer",
       items: [

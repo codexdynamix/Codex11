@@ -13,6 +13,7 @@ import { getAdminMessages, sendAdminMessage, markAdminMessagesRead, getAdminUnre
 import AdminNotificationsInbox from '../components/AdminNotificationsInbox/AdminNotificationsInbox.jsx';
 import ReactCapabilityWorkspace from '../components/ReactCapabilityWorkspace.jsx';
 import { getLeadProfilePath, getRoleScopedLeads, getRoleWorkspacePath } from '../leadProfileRouting';
+import { portalDb } from '../../../services/portalDatabase';
 
 // macOS-style funnel filter button + popover for column header filters.
 function FilterPopover({ label, value, options, open, onToggle, onSelect, onClose, formatLabel }) {
@@ -752,6 +753,7 @@ function LeadProfilePage({ role, viewingUser, data, updateLead, showNotification
     const pwd = passwordInput.trim();
     try {
       await adminSetClientPassword(lead.id, pwd);
+      portalDb.setClientPassword(lead.id, pwd);
       updateLead(lead.id, { clientPassword: pwd, client_password: pwd });
       setLiveClientPassword(pwd);
       setPasswordInput('');
@@ -770,10 +772,17 @@ function LeadProfilePage({ role, viewingUser, data, updateLead, showNotification
   }, [lead?.id, lead?.stage]);
 
   useEffect(() => {
-    if (!showSecurityModal || !lead?.id) return;
+    if (!lead?.id) return;
+    const initialPwd = lead?.clientPassword || lead?.client_password || portalDb.getClientPassword(lead.id) || 'client123';
+    setLiveClientPassword(initialPwd);
+    if (!showSecurityModal) return;
     let cancelled = false;
     fetchLeadById(lead.id)
-      .then((fresh) => { if (!cancelled) setLiveClientPassword(fresh?.clientPassword || ''); })
+      .then((fresh) => {
+        if (!cancelled && (fresh?.clientPassword || fresh?.client_password)) {
+          setLiveClientPassword(fresh.clientPassword || fresh.client_password);
+        }
+      })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [showSecurityModal, lead?.id]);

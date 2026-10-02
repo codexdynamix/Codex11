@@ -19,6 +19,9 @@ export function ClientPortalApp() {
   const getInitialPath = () => {
     if (typeof window === 'undefined') return '/portal/dashboard';
     const path = window.location.pathname;
+    if (path === '/portal' || path === '/portal/' || path === '/client' || path === '/client/') {
+      return '/portal/dashboard';
+    }
     return path.startsWith('/portal') ? path : '/portal/dashboard';
   };
 
@@ -26,9 +29,20 @@ export function ClientPortalApp() {
   const [session, setSession] = useState(() => readPortalSession());
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const p = window.location.pathname;
+      if (p === '/portal' || p === '/portal/' || p === '/client' || p === '/client/') {
+        window.history.replaceState({}, '', '/portal/dashboard');
+      }
+    }
+
     const handlePopState = () => {
       const path = window.location.pathname;
-      setCurrentPath(path.startsWith('/portal') ? path : '/portal/dashboard');
+      if (path === '/portal' || path === '/portal/') {
+        setCurrentPath('/portal/dashboard');
+      } else if (path.startsWith('/portal')) {
+        setCurrentPath(path);
+      }
       setSession(readPortalSession());
     };
 

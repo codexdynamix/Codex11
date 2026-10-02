@@ -261,29 +261,31 @@ export function PortalShell({ currentPath, onNavigate, children }: PortalShellPr
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Desktop Sidebar */}
         <aside className="hidden lg:flex w-64 h-full flex-col bg-[#FBFBFC]/95 dark:bg-[#121214]/90 backdrop-blur-2xl border-r border-black/[0.08] dark:border-white/[0.08] shrink-0 select-none">
-          {/* Active Client Account Pill - Fixed at top of sidebar */}
-          <div className="shrink-0 p-3 pb-2">
-            <div className="p-2.5 rounded-2xl bg-white dark:bg-[#1C1C1E] border border-black/[0.05] dark:border-white/[0.08] shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-              <div className="flex items-center justify-between text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-1">
-                <span>Account</span>
-                <span className="text-[#0071E3] bg-[#0071E3]/10 px-1.5 py-0.2 rounded-full font-bold">
+          {/* Active Client Account Card - Fixed at top of sidebar */}
+          <div className="shrink-0 px-3.5 pt-3.5 pb-2.5">
+            <div className="p-3.5 rounded-2xl bg-white dark:bg-[#1C1C1E] border border-black/[0.06] dark:border-white/[0.08] shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all">
+              <div className="flex items-center justify-between gap-1.5 mb-2">
+                <span className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider">
+                  Account
+                </span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-[#0071E3]/10 text-[#0071E3] dark:text-[#389BF2] text-[10px] font-semibold tracking-tight whitespace-nowrap">
                   {client.tier}
                 </span>
               </div>
-              <div className="text-xs font-semibold text-[#1D1D1F] dark:text-white truncate">
+              <div className="text-[13px] font-semibold text-[#1D1D1F] dark:text-white truncate leading-snug">
                 {client.company}
               </div>
-              <div className="text-[11px] text-[#86868B] truncate mt-0.5">
+              <div className="text-[11px] text-[#86868B] truncate mt-0.5 font-normal">
                 {client.name}
               </div>
 
               {/* Demo Switcher */}
-              <div className="mt-2 pt-2 border-t border-black/[0.04] dark:border-white/[0.06] flex items-center justify-between">
-                <span className="text-[10px] text-[#86868B]">Switch:</span>
+              <div className="mt-2.5 pt-2.5 border-t border-black/[0.05] dark:border-white/[0.07] flex items-center justify-between gap-2">
+                <span className="text-[10px] text-[#86868B] font-medium shrink-0">Switch:</span>
                 <select
                   value={client.id}
                   onChange={(e) => handleSwitchClient(e.target.value)}
-                  className="bg-black/[0.03] dark:bg-white/[0.06] border border-black/[0.06] dark:border-white/[0.08] rounded-md px-1.5 py-0.5 text-[10px] text-[#1D1D1F] dark:text-white font-medium focus:outline-none"
+                  className="bg-black/[0.03] dark:bg-white/[0.06] hover:bg-black/[0.05] dark:hover:bg-white/[0.1] border border-black/[0.08] dark:border-white/[0.1] rounded-lg px-2 py-0.5 text-[10px] text-[#1D1D1F] dark:text-white font-medium focus:outline-none transition-colors cursor-pointer max-w-[125px] truncate"
                 >
                   {allClients.map((c) => (
                     <option key={c.id} value={c.id} className="bg-white dark:bg-[#1C1C1E] text-[#1D1D1F] dark:text-white">
@@ -417,7 +419,7 @@ export function PortalShell({ currentPath, onNavigate, children }: PortalShellPr
                         <span>{item.label}</span>
                       </div>
                       {item.badge !== undefined && item.badge > 0 && (
-                        <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold bg-[#FF3B30] text-white">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-[#FF3B30] text-white">
                           {item.badge}
                         </span>
                       )}

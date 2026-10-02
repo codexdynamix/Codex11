@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
+import { crmApiPlugin } from './src/server/crmApiPlugin';
 
 const port = Number(process.env.PORT) || 3000;
 const basePath = process.env.BASE_PATH || '/';
@@ -13,6 +14,7 @@ export default defineConfig({
     tanstackRouter({ target: 'react', autoCodeSplitting: true }),
     react(),
     tailwindcss(),
+    crmApiPlugin(),
   ],
   resolve: {
     alias: {

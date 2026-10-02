@@ -1,6 +1,6 @@
-import React from 'react';
-import { Bell, CheckCircle2, ArrowRight, Receipt, Compass, Briefcase, Headphones, FolderOpen } from 'lucide-react';
-import { portalDb, type PortalClient } from '../../services/portalDatabase';
+import React, { useState, useEffect } from 'react';
+import { Bell, CheckCircle2, ArrowRight, Receipt, Compass, Briefcase, Headphones, FolderOpen, Shield } from 'lucide-react';
+import { portalDb, type PortalClient, type ClientNotification } from '../../services/portalDatabase';
 
 interface PortalNotificationsProps {
   client: PortalClient;
@@ -8,10 +8,24 @@ interface PortalNotificationsProps {
 }
 
 export function PortalNotifications({ client, onNavigate }: PortalNotificationsProps) {
-  const notifications = portalDb.getNotifications(client.id);
+  const [notifications, setNotifications] = useState<ClientNotification[]>(() => portalDb.getNotifications(client.id));
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setNotifications(portalDb.getNotifications(client.id));
+    };
+
+    window.addEventListener('cdx_portal_notification_added', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    return () => {
+      window.removeEventListener('cdx_portal_notification_added', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
+  }, [client.id]);
 
   const handleMarkAllRead = () => {
     portalDb.markAllNotificationsRead(client.id);
+    setNotifications(portalDb.getNotifications(client.id));
   };
 
   const getIcon = (type: string) => {

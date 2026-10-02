@@ -185,7 +185,9 @@ export interface ClientFile {
   name: string;
   category: 'Deliverables' | 'Designs & Branding' | 'Contracts & Legal' | 'Invoices & Receipts';
   size: string;
+  fileSize?: string;
   uploadedAt: string;
+  uploadedDate?: string;
   fileType: 'pdf' | 'zip' | 'fig' | 'png' | 'docx';
   downloadUrl: string;
 }
@@ -1287,6 +1289,131 @@ export const portalDb = {
       if (n.clientId === clientId) n.read = true;
     });
     saveDatabase(db);
+  },
+
+  addNotification(clientId: string | null, payload: { title: string; description: string; kind?: string; type?: ClientNotification['type']; link?: string }): ClientNotification[] {
+    const db = loadDatabase();
+    const now = new Date().toISOString();
+    const created: ClientNotification[] = [];
+
+    const targetClientIds = clientId ? [clientId] : db.clients.map((c) => c.id);
+
+    for (const cid of targetClientIds) {
+      const notif: ClientNotification = {
+        id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        clientId: cid,
+        title: payload.title || 'Administrator Notice',
+        description: payload.description || '',
+        type: payload.type || (payload.kind === 'billing' ? 'invoice' : payload.kind === 'project' ? 'project' : 'support'),
+        read: false,
+        link: payload.link || '/portal/notifications',
+        createdAt: now,
+      };
+      db.notifications.unshift(notif);
+      created.push(notif);
+    }
+
+    saveDatabase(db);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('cdx_portal_notification_added', { detail: created }));
+    }
+
+    return created;
+  },
+
+  setClientPassword(clientId: string, newPassword: string): boolean {
+    const db = loadDatabase();
+    const client = db.clients.find((c) => c.id === clientId || c.email === clientId);
+    if (client) {
+      client.password = newPassword;
+      saveDatabase(db);
+      this.logAudit(client.id, client.name, 'PROFILE_UPDATED', 'Client portal password updated by administrator');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('cdx_client_password_updated', { detail: { clientId: client.id, password: newPassword } }));
+      }
+      return true;
+    }
+    return false;
+  },
+
+  getClientPassword(clientId: string): string {
+    const db = loadDatabase();
+    const client = db.clients.find((c) => c.id === clientId || c.email === clientId);
+    return client?.password || 'client123';
+  },
+
+  getClientActivity(clientId: string): { logs: PortalAuditLog[]; stats: { pageViews: number; sessions: number; lastLogin: string } } {
+    const db = loadDatabase();
+    const client = db.clients.find((c) => c.id === clientId || c.email === clientId);
+    const logs = db.auditLogs
+      .filter((l) => l.clientId === clientId || (client && l.clientId === client.id))
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    const sessions = Math.max(logs.filter((l) => l.action === 'CLIENT_LOGIN').length, 1);
+    const pageViews = Math.max(logs.length * 3, 12);
+    const lastLogin = client?.lastLoginAt || logs[0]?.timestamp || new Date().toISOString();
+
+    return {
+      logs,
+      stats: {
+        pageViews,
+        sessions,
+        lastLogin,
+      },
+    };
+  },
+
+  getDirectChatMessages(clientId: string): SupportMessage[] {
+    const db = loadDatabase();
+    const ticket = db.tickets.find((t) => t.clientId === clientId);
+    if (!ticket) return [];
+    return ticket.messages.map((m) => ({
+      ...m,
+      sender: m.sender,
+    }));
+  },
+
+  sendDirectChatMessage(clientId: string, text: string, sender: 'client' | 'staff' = 'client', senderName?: string): SupportMessage {
+    const db = loadDatabase();
+    let ticket = db.tickets.find((t) => t.clientId === clientId);
+    const client = db.clients.find((c) => c.id === clientId);
+
+    if (!ticket) {
+      ticket = {
+        id: `tkt_${Date.now()}`,
+        clientId,
+        ticketNumber: `CDX-${Math.floor(1000 + Math.random() * 9000)}`,
+        subject: 'Dedicated Support Channel',
+        category: 'General Question',
+        priority: 'High',
+        status: 'Open',
+        assignedStaff: sender === 'staff' ? (senderName || 'Support Agent') : 'Support Agent',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        messages: [],
+      };
+      db.tickets.unshift(ticket);
+    }
+
+    const msg: SupportMessage = {
+      id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      sender,
+      senderName: senderName || (sender === 'staff' ? 'Support Agent' : (client?.name || 'Client')),
+      text,
+      createdAt: new Date().toISOString(),
+    };
+
+    ticket.messages.push(msg);
+    ticket.updatedAt = new Date().toISOString();
+    ticket.status = 'Open';
+    saveDatabase(db);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('cdx_chat_message_received', { detail: { clientId, message: msg } }));
+    }
+
+    return msg;
   },
 
   // ---------------------------------------------------------------------------

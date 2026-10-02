@@ -84,12 +84,19 @@ const Compose = ({ onSent }) => {
   const [busy, setBusy]                   = useState(false);
   const [result, setResult]               = useState(null);
   const ddRef = useRef(null);
-  const debouncedSearch = useDebounce(search, 280);
 
+  // Fast instant search while typing - fetches immediately on focus or input change
   useEffect(() => {
-    if (recipientMode !== 'specific' || debouncedSearch.length < 1) { setSearchResults([]); return; }
-    searchClientUsersForNotify(debouncedSearch).then(setSearchResults);
-  }, [debouncedSearch, recipientMode]);
+    if (recipientMode !== 'specific') {
+      setSearchResults([]);
+      return;
+    }
+    let cancelled = false;
+    searchClientUsersForNotify(search).then((res) => {
+      if (!cancelled) setSearchResults(res || []);
+    });
+    return () => { cancelled = true; };
+  }, [search, recipientMode]);
 
   useEffect(() => {
     const h = (e) => { if (ddRef.current && !ddRef.current.contains(e.target)) setShowDD(false); };
@@ -165,13 +172,19 @@ const Compose = ({ onSent }) => {
               {showDD && searchResults.length > 0 && (
                 <div style={s.ddList}>
                   {searchResults.map(u => (
-                    <div key={u.id} style={s.ddItem}
+                    <div key={u.id} style={{ ...s.ddItem, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                       onMouseDown={() => selectUser(u)}
-                      onMouseEnter={e => e.currentTarget.style.background = 'var(--crm-card)'}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
-                      <span style={{ fontWeight: 600 }}>{u.name || '(no name)'}</span>
-                      <span style={{ color: 'var(--crm-text-secondary)', marginLeft: 8, fontSize: 12 }}>{u.email}</span>
+                      <div>
+                        <span style={{ fontWeight: 600 }}>{u.name || '(no name)'}</span>
+                        {u.company && <span style={{ color: 'var(--crm-accent, #0A84FF)', marginLeft: 8, fontSize: 11.5 }}>({u.company})</span>}
+                        <span style={{ color: 'var(--crm-text-secondary)', marginLeft: 8, fontSize: 12 }}>{u.email}</span>
+                      </div>
+                      <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 9999, background: 'rgba(255,255,255,0.06)', color: 'var(--crm-text-secondary)' }}>
+                        Client
+                      </span>
                     </div>
                   ))}
                 </div>

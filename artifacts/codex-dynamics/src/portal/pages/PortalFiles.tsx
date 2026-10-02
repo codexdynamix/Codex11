@@ -114,9 +114,9 @@ export function PortalFiles({ client, onNavigate }: PortalFilesProps) {
                     {f.name}
                   </div>
                   <div className="text-xs text-[#86868B] mt-0.5 flex items-center gap-2">
-                    <span className="font-mono text-[11px]">{f.fileSize}</span>
+                    <span className="font-mono text-[11px]">{f.size || f.fileSize}</span>
                     <span className="text-black/20 dark:text-white/20">·</span>
-                    <span>{f.uploadedDate}</span>
+                    <span>{f.uploadedAt || f.uploadedDate}</span>
                     <span className="text-black/20 dark:text-white/20">·</span>
                     <span className="text-[#0071E3] font-medium">{f.category}</span>
                   </div>

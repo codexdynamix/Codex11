@@ -2514,7 +2514,7 @@ function SuperAdminPanel({ data, currentUser, setData, assignOfficeManager, crea
   const [staffSubTab, setStaffSubTab] = useState('Staff');
   const [activeSubTab, setActiveSubTab] = useState(() => {
     const saved = sessionStorage.getItem('sa_activeSubTab');
-    const allowed = ['Lead Management', 'Lead Upload', 'Notifications', 'Security'];
+    const allowed = ['Lead Management', 'Lead Upload', 'Notifications'];
     return allowed.includes(saved) ? saved : 'Lead Management';
   });
   const tabsScrollRef = useRef(null);
@@ -2840,10 +2840,6 @@ function SuperAdminPanel({ data, currentUser, setData, assignOfficeManager, crea
       <button className={"crm-tab-btn " + (activeTab === 'Leads' && activeSubTab === 'Notifications' ? 'crm-active' : '')} onClick={() => { setActiveTab('Leads'); setActiveSubTab('Notifications'); }}>
         Notifications
       </button>
-      <button className={"crm-tab-btn " + (activeTab === 'Leads' && activeSubTab === 'Security' ? 'crm-active' : '')} onClick={() => { setActiveTab('Leads'); setActiveSubTab('Security'); }} style={{ position: 'relative' }}>
-        Security
-        {pendingCounts.password_resets > 0 && <span className="crm-tab-pending-badge" aria-label={`${pendingCounts.password_resets} pending`}>{pendingCounts.password_resets > 99 ? '99+' : pendingCounts.password_resets}</span>}
-      </button>
       <button className={"crm-tab-btn " + (activeTab === 'Enquiries' ? 'crm-active' : '')} onClick={() => setActiveTab('Enquiries')}>
         Enquiries
       </button>
@@ -3103,8 +3099,6 @@ function SuperAdminPanel({ data, currentUser, setData, assignOfficeManager, crea
                   </div>
                 ) : activeSubTab === 'Notifications' ? (
                   <Notifications data={data} setData={setData} currentUserId={data.users.find(u => u.role === ROLE.SUPER_ADMIN)?.id} />
-                ) : activeSubTab === 'Security' ? (
-                  <SecurityRequests showNotification={showNotification} />
                 ) : null}
               </div>
             ) : activeTab === 'Enquiries' ? (

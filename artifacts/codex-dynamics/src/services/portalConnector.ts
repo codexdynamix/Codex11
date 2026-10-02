@@ -22,6 +22,7 @@ import { portalDb, type ClientWebsite, type PortalClient } from './portalDatabas
 
 export interface ConnectorVerificationResult {
   success: boolean;
+  message?: string;
   error?: string;
   website?: ClientWebsite;
   client?: PortalClient;
@@ -30,6 +31,7 @@ export interface ConnectorVerificationResult {
     name: string;
     email: string;
     role: string;
+    company?: string;
   };
   sessionToken?: string;
   timestamp: string;
@@ -45,6 +47,7 @@ export function verifyCodexPortalToken(ssoToken: string, websiteId: string): Con
     return {
       success: false,
       error: result.error || 'Token verification failed',
+      message: result.error || 'Token verification failed',
       timestamp: new Date().toISOString(),
     };
   }
@@ -53,9 +56,13 @@ export function verifyCodexPortalToken(ssoToken: string, websiteId: string): Con
 
   return {
     success: true,
+    message: 'SSO Token verified successfully',
     website: result.website,
     client: result.client,
-    authenticatedUser: result.sessionUser,
+    authenticatedUser: result.sessionUser ? {
+      ...result.sessionUser,
+      company: result.client?.company || '',
+    } : undefined,
     sessionToken: localSessionToken,
     timestamp: new Date().toISOString(),
   };
