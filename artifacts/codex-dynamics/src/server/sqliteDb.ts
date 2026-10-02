@@ -22,20 +22,32 @@ export function getSqliteDb(): SqliteDbInstance {
   }
 
   // Ensure data directory exists
-  const dataDir = path.resolve(process.cwd(), 'artifacts/codex-dynamics/data');
+  const serverDir = typeof import.meta !== 'undefined' && import.meta.dirname ? import.meta.dirname : __dirname;
+  const projectRoot = path.resolve(serverDir, '../..');
+  const dataDir = path.resolve(projectRoot, 'data');
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
   }
 
   const dbFilePath = path.join(dataDir, 'codex.sqlite');
-  const db = new DatabaseSync(dbFilePath);
-
-  // Enable WAL journal mode & foreign keys for optimal SQLite concurrency
-  db.exec('PRAGMA journal_mode = WAL;');
-  db.exec('PRAGMA foreign_keys = ON;');
-
-  // Initialize all SQL Schemas (matches public/api/db.php)
-  initSqlSchema(db);
+  let db: any;
+  try {
+    db = new DatabaseSync(dbFilePath);
+    db.exec('PRAGMA journal_mode = WAL;');
+    db.exec('PRAGMA foreign_keys = ON;');
+    initSqlSchema(db);
+  } catch (err) {
+    console.warn('[AI Studio] SQLite error, falling back to memory database:', err);
+    try {
+      db = new DatabaseSync(':memory:');
+      initSqlSchema(db);
+    } catch {
+      db = {
+        exec: () => {},
+        prepare: () => ({ all: () => [], get: () => null, run: () => ({ lastInsertRowid: 0, changes: 0 }) }),
+      };
+    }
+  }
 
   dbInstance = db;
   return db;

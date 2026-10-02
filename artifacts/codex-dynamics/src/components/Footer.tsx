@@ -15,7 +15,6 @@ import { useSiteConfig } from "@/context/SiteConfigContext";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
 import { useContactModal } from "@/context/ContactModalContext";
 import { MessageSquare } from "lucide-react";
-import { ThemeToggle } from "@/components/ThemeToggle";
 
 export function Footer() {
   const {
@@ -208,17 +207,38 @@ export function Footer() {
             <h3 className="mb-4 font-medium text-label">Company</h3>
             <ul className="space-y-2.5">
               <li>
-                <a href="#process" className="hover:text-label transition-colors">
+                <a
+                  href="#process"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    document.getElementById("process")?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                  className="hover:text-label transition-colors"
+                >
                   Process
                 </a>
               </li>
               <li>
-                <a href="#capabilities" className="hover:text-label transition-colors">
+                <a
+                  href="#capabilities"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    (document.getElementById("capabilities") || document.getElementById("services"))?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                  className="hover:text-label transition-colors"
+                >
                   Capabilities
                 </a>
               </li>
               <li>
-                <a href="#about" className="hover:text-label transition-colors">
+                <a
+                  href="#about"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    document.getElementById("about")?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                  className="hover:text-label transition-colors"
+                >
                   About
                 </a>
               </li>
@@ -248,12 +268,26 @@ export function Footer() {
             <h3 className="mb-4 font-medium text-label">Work & Inquiries</h3>
             <ul className="space-y-2.5">
               <li>
-                <a href="#work" className="hover:text-label transition-colors">
+                <a
+                  href="#work"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    (document.getElementById("work") || document.getElementById("portfolio"))?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                  className="hover:text-label transition-colors"
+                >
                   Selected work
                 </a>
               </li>
               <li>
-                <a href="#results" className="hover:text-label transition-colors">
+                <a
+                  href="#results"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    document.getElementById("results")?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                  className="hover:text-label transition-colors"
+                >
                   Results
                 </a>
               </li>
@@ -298,7 +332,6 @@ export function Footer() {
           </p>
 
           <div className="flex items-center gap-4">
-            <ThemeToggle variant="pill" showLabel />
             <button
               type="button"
               onClick={() => openContactModal()}

@@ -4,6 +4,7 @@ import { MemoryRouter, Route as ReactRouterRoute, Routes } from "react-router-do
 import { SiteConfigProvider } from "@/context/SiteConfigContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { ContactModalProvider } from "@/context/ContactModalContext";
+import { LoginViewProvider } from "@/context/LoginViewContext";
 import { Toaster } from "sonner";
 import { TidioWidget } from "@/components/TidioWidget";
 import { GlobalVisitorTracker } from "@/components/GlobalVisitorTracker";
@@ -21,6 +22,17 @@ export function RootShell() {
       setCurrentPathname(window.location.pathname);
     };
     window.addEventListener("popstate", handleLocationChange);
+
+    // Prevent browsers from restoring prior scroll offset on refresh
+    if (typeof window !== "undefined") {
+      if ("scrollRestoration" in window.history) {
+        window.history.scrollRestoration = "manual";
+      }
+      if (!window.location.hash) {
+        window.scrollTo(0, 0);
+      }
+    }
+
     return () => {
       window.removeEventListener("popstate", handleLocationChange);
     };
@@ -34,39 +46,41 @@ export function RootShell() {
 
   return (
     <ThemeProvider>
-      <ContactModalProvider>
-        <SiteConfigProvider>
-          <GlobalVisitorTracker />
-          <TidioWidget />
-          {isAdminPath ? (
-            <Suspense fallback={<div role="status" aria-live="polite">Loading CRM…</div>}>
-              <MemoryRouter initialEntries={[initialEntry]}>
-                <Routes>
-                  <ReactRouterRoute path="/*" element={<CodexDynamicsAdminApp />} />
-                </Routes>
-              </MemoryRouter>
-            </Suspense>
-          ) : isPortalPath ? (
-            <Suspense fallback={<div role="status" aria-live="polite" className="min-h-screen bg-[#0E1116] flex items-center justify-center text-white text-xs">Loading Portal…</div>}>
-              <ClientPortalApp />
-            </Suspense>
-          ) : (
-            <Outlet />
-          )}
-          <Toaster
-            position="top-center"
-            offset={56}
-            toastOptions={{
-              style: {
-                background: "var(--color-popover)",
-                border: "1px solid var(--color-hairline)",
-                color: "var(--color-label)",
-                borderRadius: "12px",
-              },
-            }}
-          />
-        </SiteConfigProvider>
-      </ContactModalProvider>
+      <LoginViewProvider>
+        <ContactModalProvider>
+          <SiteConfigProvider>
+            <GlobalVisitorTracker />
+            <TidioWidget />
+            {isAdminPath ? (
+              <Suspense fallback={<div role="status" aria-live="polite">Loading CRM…</div>}>
+                <MemoryRouter initialEntries={[initialEntry]}>
+                  <Routes>
+                    <ReactRouterRoute path="/*" element={<CodexDynamicsAdminApp />} />
+                  </Routes>
+                </MemoryRouter>
+              </Suspense>
+            ) : isPortalPath ? (
+              <Suspense fallback={<div role="status" aria-live="polite" className="min-h-screen bg-[#0E1116] flex items-center justify-center text-white text-xs">Loading Portal…</div>}>
+                <ClientPortalApp />
+              </Suspense>
+            ) : (
+              <Outlet />
+            )}
+            <Toaster
+              position="top-center"
+              offset={56}
+              toastOptions={{
+                style: {
+                  background: "var(--color-popover)",
+                  border: "1px solid var(--color-hairline)",
+                  color: "var(--color-label)",
+                  borderRadius: "12px",
+                },
+              }}
+            />
+          </SiteConfigProvider>
+        </ContactModalProvider>
+      </LoginViewProvider>
     </ThemeProvider>
   );
 }

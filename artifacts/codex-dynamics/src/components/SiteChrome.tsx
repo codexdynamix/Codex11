@@ -13,8 +13,10 @@ import { Footer } from "@/components/Footer";
 import { WhatsAppDock } from "@/components/WhatsAppDock";
 import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 import { MaintenanceScreen } from "@/components/MaintenanceScreen";
+import { ClientLoginSplitView } from "@/components/ClientLoginSplitView";
 import { useSiteConfig } from "@/context/SiteConfigContext";
 import { usePreviewMode } from "@/context/PreviewModeContext";
+import { useLoginView } from "@/context/LoginViewContext";
 import {
   isComponentEnabled,
   resolveSectionVisibility,
@@ -97,10 +99,17 @@ export function SitePageBody({ page = "home" }: { page?: PreviewPage }) {
 export function SiteChrome({ page = "home" }: { page?: PreviewPage }) {
   const { config } = useSiteConfig();
   const preview = usePreviewMode();
+  const { isLoginActive, closeLogin } = useLoginView();
 
   // If maintenance mode is active and not in preview editor iframe, show maintenance screen
   if (config.emergency?.maintenanceMode && !preview.isPreview) {
     return <MaintenanceScreen />;
+  }
+
+  // When login is active, the landing page ITSELF changes into the split login screen
+  // (Site info & blue branding on the left, login form on the right - NOT a modal on top)
+  if (isLoginActive) {
+    return <ClientLoginSplitView onClose={closeLogin} />;
   }
 
   const showHeader = isComponentEnabled(config, "header-builder");

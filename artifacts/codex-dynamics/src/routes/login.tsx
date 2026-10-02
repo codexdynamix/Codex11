@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { PortalLogin } from "@/portal/pages/PortalLogin";
+import { ClientLoginSplitView } from "@/components/ClientLoginSplitView";
 
 export const Route = createFileRoute("/login")({
   component: LoginRouteComponent,
@@ -7,8 +7,11 @@ export const Route = createFileRoute("/login")({
 
 function LoginRouteComponent() {
   return (
-    <PortalLogin
-      onLoginSuccess={() => {
+    <ClientLoginSplitView
+      onClose={() => {
+        window.location.assign("/");
+      }}
+      onSuccess={() => {
         window.location.assign("/portal/dashboard");
       }}
     />
