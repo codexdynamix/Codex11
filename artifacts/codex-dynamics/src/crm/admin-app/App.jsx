@@ -420,7 +420,13 @@ function BackofficeLanding() {
 
       {/* Client Portal Link */}
       <div
-        onClick={() => { window.location.href = '/login'; }}
+        onClick={() => {
+          if (typeof window !== 'undefined' && typeof window.cdxNavigate === 'function') {
+            window.cdxNavigate('/login');
+          } else {
+            window.location.assign('/login');
+          }
+        }}
         style={{
           background: 'var(--crm-card, #181A20)',
           border: '1px solid var(--crm-border, rgba(255,255,255,0.08))',

@@ -1660,7 +1660,7 @@ export default function StaffProfilePage({
                             />
                           </td>
                           <td style={{ fontSize: 11, color: 'var(--crm-text-secondary)' }}>
-                            {lead.registeredDate || '-'}
+                            {lead.registeredDate || (lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : '-')}
                           </td>
                         </tr>
                       ))}

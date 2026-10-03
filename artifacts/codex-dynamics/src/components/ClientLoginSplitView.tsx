@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Lock, AlertCircle, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { portalLogin } from '@/services/portalAuth';
+import { smoothNavigate } from '@/lib/nav';
 
 export interface ClientLoginSplitViewProps {
   onClose?: () => void;
@@ -45,7 +46,7 @@ export function ClientLoginSplitView({
       if (onSuccess) {
         onSuccess();
       } else {
-        window.location.assign('/portal/dashboard');
+        smoothNavigate('/portal/dashboard');
       }
     } catch (err: any) {
       setError(err?.message || 'Authentication failed. Please check your credentials.');
@@ -58,7 +59,7 @@ export function ClientLoginSplitView({
     if (onClose) {
       onClose();
     } else {
-      window.location.assign('/');
+      smoothNavigate('/');
     }
   };
 

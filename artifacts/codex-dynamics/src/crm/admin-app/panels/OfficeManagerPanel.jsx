@@ -710,7 +710,7 @@ function OfficeLeadsTable({ data, currentUser, teamsForOffice, agents, setLeadAs
                 <td style={{ color: lead.assignedToAgent ? '#0ECB81' : 'var(--crm-text-secondary)', fontSize: 12 }}>
                   {lead.assignedToAgent ? getUserName(lead.assignedToAgent, data.users) : '-'}
                 </td>
-                <td style={{ fontSize: 11, color: 'var(--crm-text-secondary)' }}>{lead.registeredDate || '-'}</td>
+                <td style={{ fontSize: 11, color: 'var(--crm-text-secondary)' }}>{lead.registeredDate || (lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : '-')}</td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                   <button
                     title="Add comment"

@@ -85,10 +85,15 @@ function initSqlSchema(db: SqliteDbInstance) {
       status_history TEXT,
       appointments TEXT,
       activity_record TEXT,
+      registered_date TEXT,
       created_at TEXT,
       updated_at TEXT
     );
   `);
+
+  try {
+    db.exec('ALTER TABLE leads ADD COLUMN registered_date TEXT;');
+  } catch (_) {}
 
   // 2. Clients / Users Table
   db.exec(`

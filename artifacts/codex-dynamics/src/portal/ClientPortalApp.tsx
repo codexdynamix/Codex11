@@ -19,7 +19,7 @@ export function ClientPortalApp() {
   const getInitialPath = () => {
     if (typeof window === 'undefined') return '/portal/dashboard';
     const path = window.location.pathname;
-    if (path === '/portal' || path === '/portal/' || path === '/client' || path === '/client/') {
+    if (path === '/portal' || path === '/portal/' || path === '/client' || path === '/client/' || path === '/portal/login') {
       return '/portal/dashboard';
     }
     return path.startsWith('/portal') ? path : '/portal/dashboard';
@@ -32,6 +32,7 @@ export function ClientPortalApp() {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       const impersonateId = urlParams.get('impersonateClientId') || urlParams.get('impersonateLeadId');
+
       if (impersonateId) {
         let clientData: any = null;
         try {
@@ -41,7 +42,6 @@ export function ClientPortalApp() {
         const id = impersonateId;
         const name = clientData?.name || clientData?.company || 'Client';
         const email = clientData?.email || '';
-        const token = `cdx_sess_${id}_${Date.now()}`;
         const portalClient = {
           id,
           name,
@@ -55,14 +55,13 @@ export function ClientPortalApp() {
           portalEnabled: true,
           tier: (clientData?.tier || 'Enterprise Partner') as any,
           lastLoginAt: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
+          createdAt: clientData?.createdAt || new Date().toISOString(),
         };
-        setPortalSession(portalClient);
         sessionStorage.setItem('codex_impersonating_admin', 'true');
         sessionStorage.setItem('codex_impersonating_client_name', name);
+        setPortalSession(portalClient);
         window.history.replaceState({}, '', '/portal/dashboard');
         setCurrentPath('/portal/dashboard');
-        setSession(readPortalSession());
       } else {
         const p = window.location.pathname;
         if (p === '/portal' || p === '/portal/' || p === '/client' || p === '/client/') {
@@ -78,7 +77,6 @@ export function ClientPortalApp() {
       } else if (path.startsWith('/portal')) {
         setCurrentPath(path);
       }
-      setSession(readPortalSession());
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -107,11 +105,10 @@ export function ClientPortalApp() {
     if (typeof window !== 'undefined') {
       window.history.pushState({}, '', path);
     }
-    setSession(readPortalSession());
   };
 
-  // If user is accessing login route or unauthenticated
-  if (!session || currentPath === '/portal/login') {
+  // If unauthenticated, show login
+  if (!session) {
     return (
       <PortalLogin
         onLoginSuccess={() => {

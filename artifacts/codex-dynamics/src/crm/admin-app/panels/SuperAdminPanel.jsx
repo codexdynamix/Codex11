@@ -168,7 +168,13 @@ function AllLeadsTable({ data, currentUser, setData, setLeadAssignment, showNoti
       sessionStorage.setItem('codex_impersonating_client_name', clientName);
       sessionStorage.setItem('codex_impersonate_lead', JSON.stringify(lead));
 
-      window.location.href = `${window.location.origin}/portal/dashboard`;
+      const targetUrl = `/portal/dashboard?impersonateClientId=${encodeURIComponent(clientId)}`;
+      if (typeof window !== 'undefined' && typeof window.cdxNavigate === 'function') {
+        window.cdxNavigate(targetUrl);
+      } else {
+        window.history.pushState(null, '', targetUrl);
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
     } catch (err) {
       console.error('Failed to enter client account:', err);
       showNotification('Could not enter client account.');
@@ -1497,7 +1503,7 @@ function AllLeadsTable({ data, currentUser, setData, setLeadAssignment, showNoti
                     <td style={{ color: lead.assignedToAgent ? '#0ECB81' : 'var(--crm-text-secondary)', fontSize: 12 }}>
                       {lead.assignedToAgent ? getUserName(lead.assignedToAgent, data.users) : '-'}
                     </td>
-                    <td style={{ fontSize: 11, color: 'var(--crm-text-secondary)' }}>{lead.registeredDate || '-'}</td>
+                    <td style={{ fontSize: 11, color: 'var(--crm-text-secondary)' }}>{lead.registeredDate || (lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : '-')}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>
                       {(() => {
                         const raw = lead.lastCommentDate;
@@ -1687,12 +1693,12 @@ function AllLeadsTable({ data, currentUser, setData, setLeadAssignment, showNoti
             {/* Lead Info Grid - 3 Columns */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 20 }}>
               <div style={{ background: '#2B2F38', borderRadius: 8, padding: 16, border: '1px solid var(--crm-border)' }}>
-                <div style={{ fontSize: 11, color: 'var(--crm-text-secondary)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 12 }}>Lead Details</div>
+                <div style={{ fontSize: 11, color: 'var(--crm-text-secondary)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 12 }}>Client Details</div>
                 {[
                   ['Country', profileLead.country || '-'],
                   ['Funnel', profileLead.funnel || '-'],
                   ['Affiliate', profileLead.affiliate || '-'],
-                  ['Registered', profileLead.registeredDate || '-'],
+                  ['Registered', profileLead.registeredDate || (profileLead.createdAt ? new Date(profileLead.createdAt).toLocaleDateString() : '-')],
                   ['Last Comment', profileLead.lastCommentDate || '-'],
                 ].map(([label, val]) => (
                   <div key={label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 13 }}>

@@ -19,30 +19,82 @@ export interface PortalSession {
 export function readPortalSession(): PortalSession | null {
   if (typeof window === 'undefined') return null;
   try {
+    const isImpersonating = sessionStorage.getItem('codex_impersonating_admin') === 'true';
     const token = localStorage.getItem(PORTAL_TOKEN_KEY);
     const raw = localStorage.getItem(PORTAL_USER_KEY);
-    if (!token || !raw) {
+
+    let client: PortalClient | null = null;
+    if (raw) {
+      try {
+        client = JSON.parse(raw) as PortalClient;
+      } catch (_) {}
+    }
+
+    // If admin is impersonating but user payload isn't in localStorage, check sessionStorage
+    if (!client && isImpersonating) {
+      try {
+        const leadRaw = sessionStorage.getItem('codex_impersonate_lead');
+        if (leadRaw) {
+          const lead = JSON.parse(leadRaw);
+          const name = lead.name || `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || 'Client';
+          client = {
+            id: lead.id,
+            name,
+            company: lead.company || name,
+            email: lead.email || '',
+            phone: lead.phone || '',
+            address: lead.address || '',
+            country: lead.country || 'United Kingdom',
+            countryCode: lead.countryCode || 'GB',
+            status: 'Active',
+            portalEnabled: true,
+            tier: (lead.tier || 'Enterprise Partner') as any,
+            lastLoginAt: new Date().toISOString(),
+            createdAt: lead.createdAt || new Date().toISOString(),
+          };
+          localStorage.setItem(PORTAL_TOKEN_KEY, `cdx_sess_${client.id}_${Date.now()}`);
+          localStorage.setItem(PORTAL_USER_KEY, JSON.stringify(client));
+        }
+      } catch (_) {}
+    }
+
+    if (!client) {
       return null;
     }
-    const client = JSON.parse(raw) as PortalClient;
-    // Verify client still exists and is enabled in the database
+
+    // If accessing via admin authority, bypass password and disabled check
+    if (isImpersonating) {
+      return {
+        token: token || `cdx_sess_${client.id}_${Date.now()}`,
+        client,
+        loginTime: Date.now(),
+      };
+    }
+
+    // Standard client login verification
     const freshClient = portalDb.getClientById(client.id);
     if (!freshClient || !freshClient.portalEnabled || freshClient.status !== 'Active') {
       clearPortalSession();
       return null;
     }
     return {
-      token,
+      token: token || `cdx_sess_${freshClient.id}_${Date.now()}`,
       client: freshClient,
       loginTime: Date.now(),
     };
   } catch (e) {
+    if (sessionStorage.getItem('codex_impersonating_admin') === 'true') {
+      return null;
+    }
     clearPortalSession();
     return null;
   }
 }
 
 export function setPortalSession(client: PortalClient): PortalSession {
+  // Ensure the client is recorded in portal database
+  portalDb.upsertClient(client);
+
   const token = `cdx_sess_${client.id}_${Date.now()}`;
   const session: PortalSession = {
     token,
@@ -69,11 +121,13 @@ export function setPortalSession(client: PortalClient): PortalSession {
     console.error('[portalAuth] failed to write session', e);
   }
 
-  // Update last login in database
-  portalDb.adminUpdateClient(client.id, {
-    lastLoginAt: new Date().toISOString(),
-  });
-  portalDb.logAudit(client.id, client.name, 'CLIENT_LOGIN', `Client signed into Client Portal successfully`);
+  // Update last login in database safely
+  try {
+    portalDb.adminUpdateClient(client.id, {
+      lastLoginAt: new Date().toISOString(),
+    });
+    portalDb.logAudit(client.id, client.name, 'CLIENT_LOGIN', `Client signed into Client Portal successfully`);
+  } catch (_) {}
 
   return session;
 }

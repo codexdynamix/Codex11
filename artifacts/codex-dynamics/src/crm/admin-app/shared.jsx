@@ -922,6 +922,16 @@ export function EditLeadModal({ lead, onClose, onSave }) {
   const [lastName, setLastName] = React.useState(lead?.lastName || '');
   const [email, setEmail] = React.useState(lead?.email || '');
   const [clientPassword, setClientPassword] = React.useState(lead?.clientPassword || '');
+  const [registeredDate, setRegisteredDate] = React.useState(() => {
+    const raw = lead?.registeredDate || lead?.registered_date || lead?.createdAt || lead?.created_at;
+    if (!raw) return new Date().toISOString().slice(0, 10);
+    try {
+      const d = new Date(raw);
+      return !isNaN(d.getTime()) ? d.toISOString().slice(0, 10) : '';
+    } catch {
+      return '';
+    }
+  });
   const [showPwd, setShowPwd] = React.useState(false);
   const [formError, setFormError] = React.useState('');
   const [pwFetching, setPwFetching] = React.useState(false);
@@ -992,6 +1002,8 @@ export function EditLeadModal({ lead, onClose, onSave }) {
       phone: fullPhone,
       country: selectedCountry?.name || '',
       countryCode: selectedCountry?.code || '',
+      registeredDate: registeredDate ? (isNaN(new Date(registeredDate).getTime()) ? registeredDate : new Date(registeredDate).toLocaleDateString()) : '',
+      registered_date: registeredDate ? (isNaN(new Date(registeredDate).getTime()) ? registeredDate : new Date(registeredDate).toLocaleDateString()) : '',
     };
     if (passwordChanged) {
       payload.clientPassword = clientPassword;
@@ -1008,10 +1020,10 @@ export function EditLeadModal({ lead, onClose, onSave }) {
     <div style={overlay} onClick={onClose}>
       <div style={card} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <h2 style={{ margin: 0, fontSize: 18 }}>Edit Lead Profile</h2>
+          <h2 style={{ margin: 0, fontSize: 18 }}>Edit Client Profile</h2>
           <button type="button" onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--crm-text-secondary)', fontSize: 22, cursor: 'pointer' }}>×</button>
         </div>
-        <p style={{ margin: '0 0 8px 0', color: 'var(--crm-text-secondary)', fontSize: 13 }}>Changes here propagate everywhere this lead is shown.</p>
+        <p style={{ margin: '0 0 8px 0', color: 'var(--crm-text-secondary)', fontSize: 13 }}>Changes here propagate everywhere this client is shown.</p>
         {formError && (
           <div style={{ background: 'rgba(255,69,58,0.12)', border: '1px solid rgba(255,69,58,0.45)', color: '#FF6B61', padding: '8px 12px', borderRadius: 8, fontSize: 13, marginBottom: 8 }}>
             {formError}
@@ -1047,6 +1059,13 @@ export function EditLeadModal({ lead, onClose, onSave }) {
             }}
             number={phoneNumber}
             onNumberChange={setPhoneNumber}
+          />
+          <label style={labelStyle}>Registered Date</label>
+          <input
+            type="date"
+            style={inputStyle}
+            value={registeredDate}
+            onChange={(e) => setRegisteredDate(e.target.value)}
           />
           <div className="crm-pw-field" style={{ marginTop: 16 }}>
             <div className="crm-pw-field-head">

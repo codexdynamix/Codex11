@@ -154,6 +154,7 @@ export function crmApiPlugin(): Plugin {
             const agentId = body.assigned_agent_id || body.assignedToAgent || 'adm_ag';
             const clientPassword = (body.password || body.client_password || body.clientPassword || ('client' + Math.floor(100 + Math.random() * 900))).toString().trim();
 
+            const registeredDate = (body.registered_date || body.registeredDate || new Date().toLocaleDateString()).trim();
             const commentHistory = message
               ? JSON.stringify([{ id: 'c_' + Date.now(), by_name: 'Website Intake', text: message, created_at: now }])
               : JSON.stringify([]);
@@ -165,13 +166,13 @@ export function crmApiPlugin(): Plugin {
                 id, first_name, last_name, name, email, phone, country, country_code,
                 stage, status, funnel, company, service, budget, timeline, message,
                 source, client_password, assigned_office_id, assigned_team_id, assigned_agent_id,
-                comment_history, status_history, appointments, activity_record, created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'New', 'New', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?)
+                comment_history, status_history, appointments, activity_record, registered_date, created_at, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'New', 'New', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?)
             `).run(
               id, first, last, name, email, phone, country, countryCode,
               funnel, company, service, budget, timeline, message,
               source, clientPassword, officeId, teamId, agentId,
-              commentHistory, statusHistory, activityRecord, now, now
+              commentHistory, statusHistory, activityRecord, registeredDate, now, now
             );
 
             db.prepare(`
@@ -210,6 +211,8 @@ export function crmApiPlugin(): Plugin {
           const rawLeads = db.prepare('SELECT * FROM leads ORDER BY created_at DESC').all();
           const leads = rawLeads.map((r: any) => ({
             ...r,
+            registered_date: r.registered_date || (r.created_at ? new Date(r.created_at).toLocaleDateString() : new Date().toLocaleDateString()),
+            registeredDate: r.registered_date || (r.created_at ? new Date(r.created_at).toLocaleDateString() : new Date().toLocaleDateString()),
             comment_history: r.comment_history ? (typeof r.comment_history === 'string' ? JSON.parse(r.comment_history) : r.comment_history) : [],
             status_history: r.status_history ? (typeof r.status_history === 'string' ? JSON.parse(r.status_history) : r.status_history) : [],
             appointments: r.appointments ? (typeof r.appointments === 'string' ? JSON.parse(r.appointments) : r.appointments) : [],
@@ -253,6 +256,10 @@ export function crmApiPlugin(): Plugin {
             if (updates.assigned_agent_id !== undefined) { fields.push('assigned_agent_id = ?'); vals.push(updates.assigned_agent_id); }
             if (updates.comment_history !== undefined) { fields.push('comment_history = ?'); vals.push(typeof updates.comment_history === 'string' ? updates.comment_history : JSON.stringify(updates.comment_history)); }
             if (updates.status_history !== undefined) { fields.push('status_history = ?'); vals.push(typeof updates.status_history === 'string' ? updates.status_history : JSON.stringify(updates.status_history)); }
+            if (updates.registered_date !== undefined || updates.registeredDate !== undefined) {
+              fields.push('registered_date = ?');
+              vals.push(updates.registered_date || updates.registeredDate);
+            }
             fields.push('updated_at = ?'); vals.push(new Date().toISOString());
 
             if (fields.length > 1) {

@@ -290,7 +290,13 @@ export default function LeadProfileModal({
       sessionStorage.setItem('codex_impersonating_client_name', clientName);
       sessionStorage.setItem('codex_impersonate_lead', JSON.stringify(lead));
 
-      window.location.href = `${window.location.origin}/portal/dashboard`;
+      const targetUrl = `/portal/dashboard?impersonateClientId=${encodeURIComponent(clientId)}`;
+      if (typeof window !== 'undefined' && typeof window.cdxNavigate === 'function') {
+        window.cdxNavigate(targetUrl);
+      } else {
+        window.history.pushState(null, '', targetUrl);
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
     } catch (err) {
       console.error('Failed to enter client account:', err);
       showNotification('Could not enter client account.');

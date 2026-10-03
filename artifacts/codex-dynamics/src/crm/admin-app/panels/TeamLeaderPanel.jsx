@@ -1003,7 +1003,7 @@ function TeamLeaderPanel({ data, setData, currentUser, createAgent, canCreateAge
                         </td>
                         <td style={{ fontSize: 12 }}>{getUserName(lead.assignedToAgent, data.users) || <span style={{ color: 'var(--crm-text-secondary)' }}>Unassigned</span>}</td>
                         <td style={{ textAlign: 'center', fontSize: 12 }}>{(lead.commentHistory || []).length}</td>
-                        <td style={{ fontSize: 11, color: 'var(--crm-text-secondary)' }}>{lead.registeredDate || '-'}</td>
+                        <td style={{ fontSize: 11, color: 'var(--crm-text-secondary)' }}>{lead.registeredDate || (lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : '-')}</td>
                         <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
                           <button
                             title="Edit lead profile"

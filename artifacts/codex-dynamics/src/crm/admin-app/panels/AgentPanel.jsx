@@ -546,7 +546,7 @@ function AgentPanel({ data, currentUser, setData, setUserLoginState, createLead,
                     <td>{lead.funnel || '-'}</td>
                     <td>{lead.affiliate || '-'}</td>
                     <td>{lead.lastCommentDate || '-'}</td>
-                    <td>{lead.registeredDate || '-'}</td>
+                    <td>{lead.registeredDate || (lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : '-')}</td>
                   </tr>
                   );
                 })}
@@ -618,6 +618,26 @@ function LeadProfilePage({ role, viewingUser, data, updateLead, showNotification
   const [showClientPassword, setShowClientPassword] = useState(false);
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [showEditLeadModal, setShowEditLeadModal] = useState(false);
+  const [isEditingRegistered, setIsEditingRegistered] = useState(false);
+  const [registeredDateInput, setRegisteredDateInput] = useState('');
+
+  useEffect(() => {
+    if (lead) {
+      const reg = lead.registeredDate || lead.registered_date || (lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : '');
+      setRegisteredDateInput(reg);
+    }
+  }, [lead?.id, lead?.registeredDate, lead?.createdAt]);
+
+  const displayRegisteredDate = (() => {
+    const raw = lead?.registeredDate || lead?.registered_date || lead?.createdAt || lead?.created_at;
+    if (!raw) return 'Recently';
+    try {
+      const d = new Date(raw);
+      return !isNaN(d.getTime()) ? d.toLocaleDateString() : String(raw);
+    } catch {
+      return String(raw);
+    }
+  })();
   const chatEndRef       = useRef(null);
   const typingTimeoutRef = useRef(null);
   useEffect(() => {
@@ -828,9 +848,9 @@ function LeadProfilePage({ role, viewingUser, data, updateLead, showNotification
   if (!lead) {
     return (
       <div className="crm-card">
-        <h2>Lead Not Found</h2>
-        <p>This lead either does not exist or is not available to this admin.</p>
-        <button className="crm-small-btn" onClick={() => navigate(workspacePath)}>Back to leads</button>
+        <h2>Client Not Found</h2>
+        <p>This client either does not exist or is not available to this admin.</p>
+        <button className="crm-small-btn" onClick={() => navigate(workspacePath)}>Back to clients</button>
       </div>
     );
   }
@@ -934,7 +954,7 @@ function LeadProfilePage({ role, viewingUser, data, updateLead, showNotification
     <div className="crm-card crm-agent-profile-full">
       <div className="crm-panel-header">
         <div className="crm-nav-left">
-          <button className="crm-small-btn" onClick={() => navigate(workspacePath)}>Back to leads</button>
+          <button className="crm-small-btn" onClick={() => navigate(workspacePath)}>Back to clients</button>
         </div>
         <div className="crm-nav-right">
           <button className="crm-small-btn" onClick={() => prevLead && navigate(getLeadProfilePath(role, currentUser.id, prevLead.id))} disabled={!prevLead}>◀ Prev</button>
@@ -949,7 +969,7 @@ function LeadProfilePage({ role, viewingUser, data, updateLead, showNotification
               {lead.isOnline ? 'Online' : 'Offline'}
             </span>
           </div>
-          <h2 style={{ margin: 0 }}>Lead Profile: {lead.firstName} {lead.lastName}</h2>
+          <h2 style={{ margin: 0 }}>Client Profile: {lead.firstName || lead.name} {lead.lastName || ''}</h2>
         </div>
         <div style={{ flex: '0 0 auto', marginLeft: 'auto' }}>
           <button
@@ -991,7 +1011,13 @@ function LeadProfilePage({ role, viewingUser, data, updateLead, showNotification
               sessionStorage.setItem('codex_impersonating_client_name', clientName);
               sessionStorage.setItem('codex_impersonate_lead', JSON.stringify(lead));
 
-              window.location.href = `${window.location.origin}/portal/dashboard`;
+              const targetUrl = `/portal/dashboard?impersonateClientId=${encodeURIComponent(lead.id)}`;
+              if (typeof window !== 'undefined' && typeof window.cdxNavigate === 'function') {
+                window.cdxNavigate(targetUrl);
+              } else {
+                window.history.pushState(null, '', targetUrl);
+                window.dispatchEvent(new PopStateEvent('popstate'));
+              }
             }}
           >
             Enter Client Account
@@ -1079,7 +1105,71 @@ function LeadProfilePage({ role, viewingUser, data, updateLead, showNotification
             >Save Status</button>
           </div>
           <div className="crm-detail-row"><span className="crm-label">Office / Team</span><span className="crm-value">{getOfficeName(lead.assignedToOffice, data.offices)} · {getTeamName(lead.assignedToTeam, data.teams)}</span></div>
-          <div className="crm-detail-row"><span className="crm-label">Registered</span><span className="crm-value">{lead.registeredDate || '-'}</span></div>
+          <div className="crm-detail-row">
+            <span className="crm-label">Registered</span>
+            <span className="crm-value">
+              {isEditingRegistered ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <input
+                    type="date"
+                    value={registeredDateInput ? (isNaN(new Date(registeredDateInput).getTime()) ? '' : new Date(registeredDateInput).toISOString().slice(0, 10)) : ''}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        const [y, m, d] = e.target.value.split('-');
+                        const dObj = new Date(Number(y), Number(m) - 1, Number(d));
+                        setRegisteredDateInput(dObj.toLocaleDateString());
+                      }
+                    }}
+                    style={{
+                      background: 'rgba(0, 0, 0, 0.4)',
+                      border: '1px solid var(--crm-border)',
+                      borderRadius: 6,
+                      color: 'var(--crm-text-primary)',
+                      padding: '2px 8px',
+                      fontSize: 12,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="crm-small-btn"
+                    style={{ padding: '2px 8px', fontSize: 11, background: '#0A84FF', color: '#fff' }}
+                    onClick={async () => {
+                      if (!registeredDateInput) return;
+                      await updateLead(lead.id, { registeredDate: registeredDateInput, registered_date: registeredDateInput });
+                      setIsEditingRegistered(false);
+                      showNotification && showNotification('Registered date updated.');
+                    }}
+                  >Save</button>
+                  <button
+                    type="button"
+                    className="crm-small-btn"
+                    style={{ padding: '2px 6px', fontSize: 11, opacity: 0.7 }}
+                    onClick={() => setIsEditingRegistered(false)}
+                  >✕</button>
+                </span>
+              ) : (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span>{displayRegisteredDate}</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingRegistered(true)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--crm-accent, #0A84FF)',
+                      fontSize: 11,
+                      cursor: 'pointer',
+                      padding: '1px 4px',
+                      textDecoration: 'underline',
+                    }}
+                    title="Click to edit registered date"
+                  >
+                    Edit
+                  </button>
+                </span>
+              )}
+            </span>
+          </div>
         </div>
       </div>
 

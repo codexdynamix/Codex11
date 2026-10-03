@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { ClientLoginSplitView } from "@/components/ClientLoginSplitView";
+import { smoothNavigate } from "@/lib/nav";
 
 export const Route = createFileRoute("/login")({
   component: LoginRouteComponent,
@@ -46,7 +47,7 @@ function LoginRouteComponent() {
         sessionStorage.setItem("codex_impersonating_admin", "true");
         sessionStorage.setItem("codex_impersonating_client_name", name);
 
-        window.location.assign("/portal/dashboard");
+        smoothNavigate("/portal/dashboard");
       }
     }
   }, []);
@@ -54,10 +55,10 @@ function LoginRouteComponent() {
   return (
     <ClientLoginSplitView
       onClose={() => {
-        window.location.assign("/");
+        smoothNavigate("/");
       }}
       onSuccess={() => {
-        window.location.assign("/portal/dashboard");
+        smoothNavigate("/portal/dashboard");
       }}
     />
   );

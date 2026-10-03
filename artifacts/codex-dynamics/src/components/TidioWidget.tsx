@@ -28,7 +28,31 @@ export function TidioWidget() {
   const [hasUnread, setHasUnread] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  const isAdminRoute = typeof window !== "undefined" && window.location.pathname.startsWith("/admin");
+  const [currentPath, setCurrentPath] = useState(() => {
+    return typeof window !== "undefined" ? window.location.pathname : "/";
+  });
+
+  useEffect(() => {
+    const handleLocationChange = () => {
+      if (typeof window !== "undefined") {
+        setCurrentPath(window.location.pathname);
+      }
+    };
+    window.addEventListener("popstate", handleLocationChange);
+    const timer = setInterval(handleLocationChange, 300);
+    return () => {
+      window.removeEventListener("popstate", handleLocationChange);
+      clearInterval(timer);
+    };
+  }, []);
+
+  const isClientAccount =
+    currentPath.startsWith("/portal") ||
+    currentPath.startsWith("/client") ||
+    currentPath.startsWith("/login");
+  const isAdminRoute = currentPath.startsWith("/admin");
+  const isHiddenRoute = isClientAccount || isAdminRoute;
+
   const isExternalTidio = Boolean(tidio?.enabled && tidio?.publicKey?.trim());
   const isEnabled = tidio?.enabled !== false;
   const isLeft = tidio?.position === "bottom-left";
@@ -86,10 +110,24 @@ export function TidioWidget() {
   useEffect(() => {
     if (typeof window === "undefined" || typeof document === "undefined") return;
 
-    if (isAdminRoute && tidio?.disableOnAdmin) {
+    if (isHiddenRoute) {
       if (window.tidioChatApi?.hide) {
-        window.tidioChatApi.hide();
+        try { window.tidioChatApi.hide(); } catch (_) {}
       }
+      let styleEl = document.getElementById("tidio-custom-styles") as HTMLStyleElement | null;
+      if (!styleEl) {
+        styleEl = document.createElement("style");
+        styleEl.id = "tidio-custom-styles";
+        document.head.appendChild(styleEl);
+      }
+      styleEl.textContent = `
+        #tidio-chat, #tidio-chat-iframe, [id^="tidio"], .tidio-chat-widget {
+          display: none !important;
+          visibility: hidden !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
+        }
+      `;
       return;
     }
 
@@ -379,10 +417,10 @@ export function TidioWidget() {
       document.body.classList.remove("tidio-chat-is-open");
       document.documentElement.classList.remove("tidio-chat-is-open");
     };
-  }, [isExternalTidio, tidio?.publicKey, tidio?.disableOnAdmin, isLeft, hideMobile, isAdminRoute]);
+  }, [isExternalTidio, tidio?.publicKey, tidio?.disableOnAdmin, isLeft, hideMobile, isHiddenRoute]);
 
-  // Don't render internal widget if disabled or on admin route with disableOnAdmin
-  if (isAdminRoute && tidio?.disableOnAdmin) return null;
+  // Don't render internal widget if inside client account, admin route, or if disabled
+  if (isHiddenRoute) return null;
   if (!isEnabled) return null;
 
   // If using external Tidio key, that script will handle DOM rendering

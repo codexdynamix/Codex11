@@ -12,6 +12,19 @@ import { GlobalVisitorTracker } from "@/components/GlobalVisitorTracker";
 const CodexDynamicsAdminApp = lazy(() => import("@/crm/admin-app/App.jsx"));
 const ClientPortalApp = lazy(() => import("@/portal/ClientPortalApp").then(m => ({ default: m.ClientPortalApp })));
 
+function RouteLoadingScreen({ label }: { label: string }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="min-h-screen w-full bg-[#0E1116] text-[#F5F5F7] flex flex-col items-center justify-center gap-3 select-none"
+    >
+      <div className="size-8 rounded-full border-2 border-white/10 border-t-[#0071E3] animate-spin" />
+      <span className="text-xs font-medium tracking-wide text-neutral-400">{label}</span>
+    </div>
+  );
+}
+
 export function RootShell() {
   const [currentPathname, setCurrentPathname] = useState(() => {
     return typeof window !== "undefined" ? window.location.pathname : "/";
@@ -22,6 +35,19 @@ export function RootShell() {
       setCurrentPathname(window.location.pathname);
     };
     window.addEventListener("popstate", handleLocationChange);
+
+    // Preload portal and CRM bundles in the background so transitions are instantaneous
+    if (typeof window !== "undefined") {
+      const preload = () => {
+        import("@/crm/admin-app/App.jsx");
+        import("@/portal/ClientPortalApp");
+      };
+      if ("requestIdleCallback" in window) {
+        (window as any).requestIdleCallback(preload);
+      } else {
+        setTimeout(preload, 600);
+      }
+    }
 
     // Prevent browsers from restoring prior scroll offset on refresh
     if (typeof window !== "undefined") {
@@ -50,9 +76,9 @@ export function RootShell() {
         <ContactModalProvider>
           <SiteConfigProvider>
             <GlobalVisitorTracker />
-            <TidioWidget />
+            {!isAdminPath && !isPortalPath && <TidioWidget />}
             {isAdminPath ? (
-              <Suspense fallback={<div role="status" aria-live="polite">Loading CRM…</div>}>
+              <Suspense fallback={<RouteLoadingScreen label="Loading CRM…" />}>
                 <MemoryRouter initialEntries={[initialEntry]}>
                   <Routes>
                     <ReactRouterRoute path="/*" element={<CodexDynamicsAdminApp />} />
@@ -60,7 +86,7 @@ export function RootShell() {
                 </MemoryRouter>
               </Suspense>
             ) : isPortalPath ? (
-              <Suspense fallback={<div role="status" aria-live="polite" className="min-h-screen bg-[#0E1116] flex items-center justify-center text-white text-xs">Loading Portal…</div>}>
+              <Suspense fallback={<RouteLoadingScreen label="Loading Portal…" />}>
                 <ClientPortalApp />
               </Suspense>
             ) : (

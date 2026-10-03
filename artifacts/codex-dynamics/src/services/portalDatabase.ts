@@ -1062,7 +1062,61 @@ export const portalDb = {
   // CLIENT PROFILE
   getClientById(clientId: string): PortalClient | null {
     const db = loadDatabase();
-    return db.clients.find((c) => c.id === clientId) || null;
+    const found = db.clients.find((c) => c.id === clientId);
+    if (found) return found;
+
+    // Check if there is an active impersonated lead or session client in storage
+    if (typeof window !== 'undefined') {
+      try {
+        const rawUser = localStorage.getItem('cdx_portal_session_client_v2');
+        if (rawUser) {
+          const u = JSON.parse(rawUser);
+          if (u && (u.id === clientId || !clientId)) {
+            return u;
+          }
+        }
+
+        const rawLead = sessionStorage.getItem('codex_impersonate_lead');
+        if (rawLead) {
+          const lead = JSON.parse(rawLead);
+          if (lead && (lead.id === clientId || !clientId)) {
+            const name = lead.name || `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || 'Client';
+            const client: PortalClient = {
+              id: lead.id,
+              name,
+              company: lead.company || name,
+              email: lead.email || '',
+              phone: lead.phone || '',
+              address: lead.address || '',
+              country: lead.country || 'United Kingdom',
+              countryCode: lead.countryCode || 'GB',
+              status: 'Active',
+              portalEnabled: true,
+              tier: (lead.tier || 'Enterprise Partner') as any,
+              lastLoginAt: new Date().toISOString(),
+              createdAt: lead.createdAt || new Date().toISOString(),
+            };
+            return client;
+          }
+        }
+      } catch (_) {}
+    }
+
+    return null;
+  },
+
+  upsertClient(client: PortalClient): PortalClient {
+    const db = loadDatabase();
+    const idx = db.clients.findIndex((c) => c.id === client.id);
+    if (idx !== -1) {
+      db.clients[idx] = { ...db.clients[idx], ...client };
+      saveDatabase(db);
+      return db.clients[idx];
+    } else {
+      db.clients.unshift({ ...client });
+      saveDatabase(db);
+      return client;
+    }
   },
 
   getClientByEmail(email: string): PortalClient | null {
@@ -1665,7 +1719,27 @@ export const portalDb = {
   adminUpdateClient(clientId: string, updates: Partial<PortalClient>): PortalClient {
     const db = loadDatabase();
     const idx = db.clients.findIndex((c) => c.id === clientId);
-    if (idx === -1) throw new Error('Client not found');
+    if (idx === -1) {
+      const newClient: PortalClient = {
+        id: clientId,
+        name: updates.name || 'Client',
+        company: updates.company || 'Client Co',
+        email: updates.email || '',
+        phone: updates.phone || '',
+        address: updates.address || '',
+        country: updates.country || 'United Kingdom',
+        countryCode: updates.countryCode || 'GB',
+        status: (updates.status as any) || 'Active',
+        portalEnabled: updates.portalEnabled !== undefined ? updates.portalEnabled : true,
+        tier: (updates.tier as any) || 'Enterprise Partner',
+        lastLoginAt: updates.lastLoginAt || new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        ...updates,
+      };
+      db.clients.unshift(newClient);
+      saveDatabase(db);
+      return newClient;
+    }
     db.clients[idx] = { ...db.clients[idx], ...updates };
     saveDatabase(db);
     return db.clients[idx];

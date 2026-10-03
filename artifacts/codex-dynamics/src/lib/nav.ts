@@ -10,3 +10,13 @@ export const NAV_LINKS = [
 export function scrollToId(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
 }
+
+export function smoothNavigate(path: string) {
+  if (typeof window === 'undefined') return;
+  window.history.pushState(null, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
+if (typeof window !== 'undefined') {
+  (window as any).cdxNavigate = smoothNavigate;
+}

@@ -1225,7 +1225,16 @@ function mapLeadRow(l) {
     assignedAgentName:  l.assigned_agent_name || null,
     assignedBy:         l.assigned_by || null,
     lastCommentDate:    l.last_comment_date || '',
-    registeredDate:     l.registered_date || '',
+    registeredDate:     (() => {
+      const raw = l.registered_date || l.registeredDate || l.created_at || l.createdAt;
+      if (!raw) return new Date().toLocaleDateString();
+      try {
+        const d = new Date(raw);
+        return !isNaN(d.getTime()) ? d.toLocaleDateString() : String(raw);
+      } catch (_) {
+        return String(raw);
+      }
+    })(),
     deletedAt:          l.deleted_at || null,
     createdAt:          l.created_at,
     updatedAt:          l.updated_at,
@@ -1285,6 +1294,8 @@ function leadWritePayload(updates) {
     source:           'source',
     notes:            'notes',
     enquiryId:        'enquiry_id',
+    registeredDate:   'registered_date',
+    registered_date:  'registered_date',
   };
   const out = {};
   for (const [camel, snake] of Object.entries(map)) {

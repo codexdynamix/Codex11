@@ -571,7 +571,13 @@ export function LeadsTab({
                             sessionStorage.setItem('codex_impersonating_admin', 'true');
                             sessionStorage.setItem('codex_impersonating_client_name', clientName);
                             sessionStorage.setItem('codex_impersonate_lead', JSON.stringify(l));
-                            window.location.href = '/portal/dashboard';
+                            const targetUrl = `/portal/dashboard?impersonateClientId=${encodeURIComponent(clientId)}`;
+                            if (typeof window !== 'undefined' && typeof (window as any).cdxNavigate === 'function') {
+                              (window as any).cdxNavigate(targetUrl);
+                            } else {
+                              window.history.pushState(null, '', targetUrl);
+                              window.dispatchEvent(new PopStateEvent('popstate'));
+                            }
                           }}
                           className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors cursor-pointer"
                           title="Enter Client Account directly without password"

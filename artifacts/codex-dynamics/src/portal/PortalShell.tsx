@@ -103,7 +103,13 @@ export function PortalShell({ currentPath, onNavigate, children }: PortalShellPr
             type="button"
             onClick={() => {
               sessionStorage.removeItem('codex_impersonating_admin');
-              window.location.href = '/admin';
+              const target = '/admin';
+              if (typeof window !== 'undefined' && typeof (window as any).cdxNavigate === 'function') {
+                (window as any).cdxNavigate(target);
+              } else {
+                window.history.pushState(null, '', target);
+                window.dispatchEvent(new PopStateEvent('popstate'));
+              }
             }}
             className="bg-white text-[#0071E3] hover:bg-white/90 px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-colors shadow-xs"
           >
