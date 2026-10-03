@@ -131,7 +131,7 @@ export function crmApiPlugin(): Plugin {
           return sendJson({ ok: true, projects, blogs, reviews });
         }
 
-        if (pathname === '/api/crm/leads') {
+        if (pathname === '/api/crm/leads' || pathname === '/api/admin/leads') {
           if (method === 'POST') {
             const id = 'ld_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
             const now = new Date().toISOString();
@@ -149,6 +149,9 @@ export function crmApiPlugin(): Plugin {
             const timeline = body.timeline || '';
             const message = body.message || '';
             const source = body.source || 'website_contact_modal';
+            const officeId = body.assigned_office_id || body.assignedToOffice || 'of_london';
+            const teamId = body.assigned_team_id || body.assignedToTeam || 'tm_alpha';
+            const agentId = body.assigned_agent_id || body.assignedToAgent || 'adm_ag';
             const clientPassword = (body.password || body.client_password || body.clientPassword || ('client' + Math.floor(100 + Math.random() * 900))).toString().trim();
 
             const commentHistory = message
@@ -163,11 +166,12 @@ export function crmApiPlugin(): Plugin {
                 stage, status, funnel, company, service, budget, timeline, message,
                 source, client_password, assigned_office_id, assigned_team_id, assigned_agent_id,
                 comment_history, status_history, appointments, activity_record, created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'New', 'New', ?, ?, ?, ?, ?, ?, ?, ?, 'of_london', 'tm_alpha', 'adm_ag', ?, ?, '[]', ?, ?, ?)
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'New', 'New', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?)
             `).run(
               id, first, last, name, email, phone, country, countryCode,
               funnel, company, service, budget, timeline, message,
-              source, clientPassword, commentHistory, statusHistory, activityRecord, now, now
+              source, clientPassword, officeId, teamId, agentId,
+              commentHistory, statusHistory, activityRecord, now, now
             );
 
             db.prepare(`
@@ -191,9 +195,12 @@ export function crmApiPlugin(): Plugin {
               createdAt: now,
             };
 
+            const createdLead = db.prepare('SELECT * FROM leads WHERE id = ?').get(id);
+
             return sendJson({
               ok: true,
               id,
+              lead: createdLead,
               client: newClient,
               token: `cdx_sess_${id}_${Date.now()}`,
               message: 'Client account created successfully'
@@ -203,13 +210,64 @@ export function crmApiPlugin(): Plugin {
           const rawLeads = db.prepare('SELECT * FROM leads ORDER BY created_at DESC').all();
           const leads = rawLeads.map((r: any) => ({
             ...r,
-            comment_history: r.comment_history ? JSON.parse(r.comment_history) : [],
-            status_history: r.status_history ? JSON.parse(r.status_history) : [],
-            appointments: r.appointments ? JSON.parse(r.appointments) : [],
-            activity_record: r.activity_record ? JSON.parse(r.activity_record) : { pageViews: 1, sessions: 1, lastLogin: r.created_at },
+            comment_history: r.comment_history ? (typeof r.comment_history === 'string' ? JSON.parse(r.comment_history) : r.comment_history) : [],
+            status_history: r.status_history ? (typeof r.status_history === 'string' ? JSON.parse(r.status_history) : r.status_history) : [],
+            appointments: r.appointments ? (typeof r.appointments === 'string' ? JSON.parse(r.appointments) : r.appointments) : [],
+            activity_record: r.activity_record ? (typeof r.activity_record === 'string' ? JSON.parse(r.activity_record) : r.activity_record) : { pageViews: 1, sessions: 1, lastLogin: r.created_at },
           }));
 
-          return sendJson({ ok: true, leads });
+          return sendJson({ ok: true, leads, total: leads.length, limit: 10000, offset: 0, has_more: false });
+        }
+
+        if (pathname === '/api/admin/leads/search') {
+          const q = (parsedUrl.searchParams.get('q') || '').trim().toLowerCase();
+          const limit = Math.min(100, Math.max(1, Number(parsedUrl.searchParams.get('limit')) || 8));
+          const term = `%${q}%`;
+          const rawLeads = db.prepare(`
+            SELECT * FROM leads
+            WHERE LOWER(name) LIKE ? OR LOWER(email) LIKE ? OR LOWER(company) LIKE ? OR phone LIKE ? OR id LIKE ?
+            ORDER BY created_at DESC
+            LIMIT ?
+          `).all(term, term, term, term, term, limit);
+          return sendJson({ ok: true, leads: rawLeads });
+        }
+
+        if (pathname.startsWith('/api/admin/leads/') && !pathname.endsWith('/assign') && !pathname.endsWith('/set-password')) {
+          const leadId = pathname.split('/')[4];
+          if (method === 'PATCH') {
+            const updates = body || {};
+            const fields: string[] = [];
+            const vals: any[] = [];
+            if (updates.stage !== undefined) { fields.push('stage = ?'); vals.push(updates.stage); }
+            if (updates.status !== undefined) { fields.push('status = ?'); vals.push(updates.status); }
+            if (updates.notes !== undefined) { fields.push('notes = ?'); vals.push(updates.notes); }
+            if (updates.funnel !== undefined) { fields.push('funnel = ?'); vals.push(updates.funnel); }
+            if (updates.company !== undefined) { fields.push('company = ?'); vals.push(updates.company); }
+            if (updates.phone !== undefined) { fields.push('phone = ?'); vals.push(updates.phone); }
+            if (updates.email !== undefined) { fields.push('email = ?'); vals.push(updates.email); }
+            if (updates.firstName !== undefined || updates.first_name !== undefined) { fields.push('first_name = ?'); vals.push(updates.firstName || updates.first_name); }
+            if (updates.lastName !== undefined || updates.last_name !== undefined) { fields.push('last_name = ?'); vals.push(updates.lastName || updates.last_name); }
+            if (updates.name !== undefined) { fields.push('name = ?'); vals.push(updates.name); }
+            if (updates.assigned_office_id !== undefined) { fields.push('assigned_office_id = ?'); vals.push(updates.assigned_office_id); }
+            if (updates.assigned_team_id !== undefined) { fields.push('assigned_team_id = ?'); vals.push(updates.assigned_team_id); }
+            if (updates.assigned_agent_id !== undefined) { fields.push('assigned_agent_id = ?'); vals.push(updates.assigned_agent_id); }
+            if (updates.comment_history !== undefined) { fields.push('comment_history = ?'); vals.push(typeof updates.comment_history === 'string' ? updates.comment_history : JSON.stringify(updates.comment_history)); }
+            if (updates.status_history !== undefined) { fields.push('status_history = ?'); vals.push(typeof updates.status_history === 'string' ? updates.status_history : JSON.stringify(updates.status_history)); }
+            fields.push('updated_at = ?'); vals.push(new Date().toISOString());
+
+            if (fields.length > 1) {
+              vals.push(leadId);
+              db.prepare(`UPDATE leads SET ${fields.join(', ')} WHERE id = ?`).run(...vals);
+            }
+            const updated = db.prepare('SELECT * FROM leads WHERE id = ?').get(leadId);
+            return sendJson({ ok: true, lead: updated });
+          }
+          if (method === 'DELETE') {
+            db.prepare('DELETE FROM leads WHERE id = ?').run(leadId);
+            return sendJson({ ok: true });
+          }
+          const lead = db.prepare('SELECT * FROM leads WHERE id = ?').get(leadId);
+          return sendJson({ ok: true, lead });
         }
 
         if (pathname === '/api/crm/action') {
@@ -590,6 +648,224 @@ export function crmApiPlugin(): Plugin {
           }
 
           return sendJson({ ok: true, client_id: clientId });
+        }
+
+        // -------------------------------------------------------------
+        // /api/admin/offices: Management of regional offices
+        // -------------------------------------------------------------
+        if (pathname === '/api/admin/offices') {
+          if (method === 'POST') {
+            const id = 'of_' + Date.now();
+            const name = body.name || 'New Office';
+            const now = new Date().toISOString();
+            let manager: any = null;
+            let managerId = null;
+            let managerName = body.manager_name || 'Unassigned';
+            let managerEmail = body.manager_email || '';
+
+            if (body.manager_name && body.manager_password) {
+              managerId = 'adm_' + Date.now();
+              managerEmail = managerEmail || `manager_${Date.now()}@codexdynamics.com`;
+              const caps = JSON.stringify({
+                lead_upload: true, create_agent: true, registrations: true, notifications: true, content: true, enquiries: true, chat: true
+              });
+              db.prepare(`
+                INSERT INTO staff_users (id, email, password, name, role, office_id, team_id, status, capabilities, created_at)
+                VALUES (?, ?, ?, ?, 'Office Manager', ?, null, 'Active', ?, ?)
+              `).run(managerId, managerEmail, body.manager_password, managerName, id, caps, now);
+              manager = { id: managerId, name: managerName, email: managerEmail, role: 'Office Manager', office_id: id };
+            }
+
+            db.prepare('INSERT INTO offices (id, name, manager_id, manager_name, manager_email, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+              .run(id, name, managerId, managerName, managerEmail, now);
+            const createdOffice = { id, name, manager_id: managerId, manager_name: managerName, manager_email: managerEmail, team_count: 0, agent_count: 0, lead_count: 0, created_at: now };
+            return sendJson({ ok: true, office: createdOffice, manager });
+          }
+
+          const offices = db.prepare('SELECT * FROM offices ORDER BY created_at DESC').all().map((o: any) => {
+            const team_count = (db.prepare('SELECT COUNT(*) as c FROM teams WHERE office_id = ?').get(o.id) as any)?.c || 0;
+            const agent_count = (db.prepare("SELECT COUNT(*) as c FROM staff_users WHERE office_id = ? AND role = 'Agent'").get(o.id) as any)?.c || 0;
+            const lead_count = (db.prepare('SELECT COUNT(*) as c FROM leads WHERE assigned_office_id = ?').get(o.id) as any)?.c || 0;
+            return { ...o, team_count, agent_count, lead_count };
+          });
+          return sendJson({ ok: true, offices });
+        }
+
+        if (pathname.startsWith('/api/admin/offices/')) {
+          const parts = pathname.split('/');
+          const officeId = parts[4];
+          if (parts[5] === 'manager' && method === 'POST') {
+            const managerId = body.manager_id;
+            const manager = db.prepare('SELECT * FROM staff_users WHERE id = ?').get(managerId) as any;
+            if (manager) {
+              db.prepare('UPDATE offices SET manager_id = ?, manager_name = ?, manager_email = ? WHERE id = ?')
+                .run(manager.id, manager.name, manager.email, officeId);
+              db.prepare('UPDATE staff_users SET office_id = ? WHERE id = ?').run(officeId, manager.id);
+            }
+            const office = db.prepare('SELECT * FROM offices WHERE id = ?').get(officeId);
+            return sendJson({ ok: true, office, manager });
+          }
+          if (method === 'PATCH') {
+            if (body.name) {
+              db.prepare('UPDATE offices SET name = ? WHERE id = ?').run(body.name, officeId);
+            }
+            const office = db.prepare('SELECT * FROM offices WHERE id = ?').get(officeId);
+            return sendJson({ ok: true, office });
+          }
+          if (method === 'DELETE') {
+            db.prepare('DELETE FROM offices WHERE id = ?').run(officeId);
+            return sendJson({ ok: true });
+          }
+          const office = db.prepare('SELECT * FROM offices WHERE id = ?').get(officeId);
+          return sendJson({ ok: true, office });
+        }
+
+        // -------------------------------------------------------------
+        // /api/admin/teams: Management of strategic sales teams
+        // -------------------------------------------------------------
+        if (pathname === '/api/admin/teams') {
+          if (method === 'POST') {
+            const id = 'tm_' + Date.now();
+            const name = body.name || 'New Team';
+            const officeId = body.office_id || null;
+            const maxSize = Number(body.max_size) || 10;
+            const now = new Date().toISOString();
+            let leader: any = null;
+            let leaderId = null;
+            let leaderName = body.leader_name || 'Unassigned';
+            let leaderEmail = body.leader_email || '';
+
+            if (body.leader_name && body.leader_password) {
+              leaderId = 'adm_' + Date.now();
+              leaderEmail = leaderEmail || `leader_${Date.now()}@codexdynamics.com`;
+              const caps = JSON.stringify({
+                lead_upload: true, create_agent: true, registrations: true, notifications: true, content: true, enquiries: true, chat: true
+              });
+              db.prepare(`
+                INSERT INTO staff_users (id, email, password, name, role, office_id, team_id, status, capabilities, created_at)
+                VALUES (?, ?, ?, ?, 'Team Leader', ?, ?, 'Active', ?, ?)
+              `).run(leaderId, leaderEmail, body.leader_password, leaderName, officeId, id, caps, now);
+              leader = { id: leaderId, name: leaderName, email: leaderEmail, role: 'Team Leader', office_id: officeId, team_id: id };
+            }
+
+            db.prepare('INSERT INTO teams (id, name, office_id, leader_id, leader_name, max_size, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+              .run(id, name, officeId, leaderId, leaderName, maxSize, now);
+            const createdTeam = { id, name, office_id: officeId, leader_id: leaderId, leader_name: leaderName, max_size: maxSize, agent_count: 0, lead_count: 0, created_at: now };
+            return sendJson({ ok: true, team: createdTeam, leader });
+          }
+
+          const teams = db.prepare('SELECT * FROM teams ORDER BY created_at DESC').all().map((t: any) => {
+            const agent_count = (db.prepare("SELECT COUNT(*) as c FROM staff_users WHERE team_id = ? AND role = 'Agent'").get(t.id) as any)?.c || 0;
+            const lead_count = (db.prepare('SELECT COUNT(*) as c FROM leads WHERE assigned_team_id = ?').get(t.id) as any)?.c || 0;
+            return { ...t, agent_count, lead_count };
+          });
+          return sendJson({ ok: true, teams });
+        }
+
+        if (pathname.startsWith('/api/admin/teams/')) {
+          const parts = pathname.split('/');
+          const teamId = parts[4];
+          if (method === 'PATCH') {
+            if (body.name) db.prepare('UPDATE teams SET name = ? WHERE id = ?').run(body.name, teamId);
+            if (body.max_size) db.prepare('UPDATE teams SET max_size = ? WHERE id = ?').run(Number(body.max_size), teamId);
+            const team = db.prepare('SELECT * FROM teams WHERE id = ?').get(teamId);
+            return sendJson({ ok: true, team });
+          }
+          if (method === 'DELETE') {
+            db.prepare('DELETE FROM teams WHERE id = ?').run(teamId);
+            return sendJson({ ok: true });
+          }
+          const team = db.prepare('SELECT * FROM teams WHERE id = ?').get(teamId);
+          return sendJson({ ok: true, team });
+        }
+
+        // -------------------------------------------------------------
+        // /api/admin/staff: Staff (Agent, Team Leader, Office Manager)
+        // -------------------------------------------------------------
+        if (pathname === '/api/admin/staff') {
+          if (method === 'POST') {
+            const id = 'adm_' + Date.now();
+            const name = body.name || 'New Staff';
+            const email = (body.email || `agent_${Date.now()}@codexdynamics.com`).toLowerCase().trim();
+            const password = body.password || 'admin123';
+            const role = body.role || 'Agent';
+            const teamId = body.team_id || null;
+            let officeId = body.office_id || null;
+            if (teamId && !officeId) {
+              const team = db.prepare('SELECT office_id FROM teams WHERE id = ?').get(teamId) as any;
+              if (team) officeId = team.office_id;
+            }
+            const now = new Date().toISOString();
+            const caps = JSON.stringify({
+              lead_upload: true, create_agent: true, registrations: true, notifications: true, content: true, enquiries: true, chat: true
+            });
+            db.prepare(`
+              INSERT INTO staff_users (id, email, password, name, role, office_id, team_id, status, capabilities, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?)
+            `).run(id, email, password, name, role, officeId, teamId, caps, now);
+            const createdStaff = { id, name, email, role, office_id: officeId, team_id: teamId, status: 'Active', capabilities: JSON.parse(caps), created_at: now };
+            return sendJson({ ok: true, staff: createdStaff });
+          }
+
+          const staff = db.prepare('SELECT id, email, name, role, office_id, team_id, status, capabilities, last_login_at, created_at FROM staff_users ORDER BY name ASC').all().map((s: any) => ({
+            ...s,
+            capabilities: s.capabilities ? (typeof s.capabilities === 'string' ? JSON.parse(s.capabilities) : s.capabilities) : {}
+          }));
+          return sendJson({ ok: true, staff });
+        }
+
+        if (pathname.startsWith('/api/admin/staff/')) {
+          const parts = pathname.split('/');
+          const staffId = parts[4];
+          if (parts[5] === 'block' && method === 'POST') {
+            db.prepare("UPDATE staff_users SET status = 'Suspended' WHERE id = ?").run(staffId);
+            const staff = db.prepare('SELECT * FROM staff_users WHERE id = ?').get(staffId);
+            return sendJson({ ok: true, staff });
+          }
+          if (parts[5] === 'unblock' && method === 'POST') {
+            db.prepare("UPDATE staff_users SET status = 'Active' WHERE id = ?").run(staffId);
+            const staff = db.prepare('SELECT * FROM staff_users WHERE id = ?').get(staffId);
+            return sendJson({ ok: true, staff });
+          }
+          if (method === 'PATCH') {
+            if (body.name) db.prepare('UPDATE staff_users SET name = ? WHERE id = ?').run(body.name, staffId);
+            if (body.email) db.prepare('UPDATE staff_users SET email = ? WHERE id = ?').run(body.email, staffId);
+            if (body.password) db.prepare('UPDATE staff_users SET password = ? WHERE id = ?').run(body.password, staffId);
+            if (body.team_id !== undefined) db.prepare('UPDATE staff_users SET team_id = ? WHERE id = ?').run(body.team_id, staffId);
+            const staff = db.prepare('SELECT * FROM staff_users WHERE id = ?').get(staffId);
+            return sendJson({ ok: true, staff });
+          }
+        }
+
+        // -------------------------------------------------------------
+        // Lead Assignment & Client Credential Updates
+        // -------------------------------------------------------------
+        if (pathname.startsWith('/api/admin/leads/') && pathname.endsWith('/assign') && method === 'POST') {
+          const leadId = pathname.split('/')[4];
+          const officeId = body.officeId || body.office_id || null;
+          const teamId = body.teamId || body.team_id || null;
+          const agentId = body.agentId || body.agent_id || null;
+          const now = new Date().toISOString();
+          db.prepare('UPDATE leads SET assigned_office_id = ?, assigned_team_id = ?, assigned_agent_id = ?, updated_at = ? WHERE id = ?')
+            .run(officeId, teamId, agentId, now, leadId);
+          const lead = db.prepare('SELECT * FROM leads WHERE id = ?').get(leadId);
+          return sendJson({ ok: true, lead });
+        }
+
+        if (pathname.endsWith('/set-password') && method === 'POST') {
+          const parts = pathname.split('/');
+          const userId = parts[parts.length - 2];
+          const newPassword = (body.password || body.client_password || '').trim();
+          if (!newPassword) {
+            return sendJson({ ok: false, error: 'Password cannot be empty.' }, 400);
+          }
+          db.prepare('UPDATE portal_clients SET password = ? WHERE id = ? OR email = ?').run(newPassword, userId, userId);
+          db.prepare('UPDATE leads SET client_password = ? WHERE id = ? OR email = ?').run(newPassword, userId, userId);
+          const now = new Date().toISOString();
+          const auditId = 'aud_' + Date.now();
+          db.prepare("INSERT INTO audit_logs (id, user_id, action, details, created_at) VALUES (?, ?, 'PASSWORD_RESET', 'Password updated', ?)")
+            .run(auditId, userId, now);
+          return sendJson({ ok: true, message: 'Password updated', password: newPassword });
         }
 
         if (pathname === '/api/admin/users') {

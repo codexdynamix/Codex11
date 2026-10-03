@@ -216,7 +216,7 @@ export default function SiteCrmWorkspace({
     {!standalone && <nav className="crm-site-crm-tabs">{visibleTabs.map(([key, label]) => <button key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>{label}</button>)}</nav>}
 
     {tab === 'overview' && <div className="crm-site-crm-grid">
-      {[['Leads', stats.totalLeads || 0], ['Enquiries', stats.totalEnquiries || enquiries.length], ['Blogs', stats.totalBlogs || blogs.length], ['Reviews', stats.totalReviews || reviews.length], ['Projects', stats.totalProjects || projects.length]].map(([label, value]) => <div className="crm-site-crm-stat" key={label}><span>{label}</span><strong>{value}</strong></div>)}
+      {[['Clients', stats.totalLeads || 0], ['Enquiries', stats.totalEnquiries || enquiries.length], ['Blogs', stats.totalBlogs || blogs.length], ['Reviews', stats.totalReviews || reviews.length], ['Projects', stats.totalProjects || projects.length]].map(([label, value]) => <div className="crm-site-crm-stat" key={label}><span>{label}</span><strong>{value}</strong></div>)}
       <div className="crm-site-crm-panel wide"><h3>Recent enquiries</h3>{enquiries.slice(0, 6).map((row) => <div className="crm-site-crm-row" key={row.id} style={{ cursor: onOpenLeadProfile ? 'pointer' : 'default' }} onClick={() => { if (onOpenLeadProfile) { const match = (leads || []).find((l) => l.id === row.leadId || (row.email && l.email?.toLowerCase() === row.email?.toLowerCase()) || (row.name && l.name?.toLowerCase() === row.name?.toLowerCase())) || row; onOpenLeadProfile(match); } }}><div><strong>{row.name}</strong><span>{row.email}</span></div><em>{row.status}</em></div>)}</div>
     </div>}
 

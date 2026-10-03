@@ -587,7 +587,7 @@ function App() {
       return true;
     };
 
-    const validateAdminSession = async () => {
+    const initSession = async () => {
       try {
         const freshAdmin = await fetchAdminMe();
         const adminUser  = mapAdminToUser(freshAdmin);
@@ -596,16 +596,12 @@ function App() {
           users: injectAdminUser(prev.users, adminUser),
         }));
       } catch (_) {
-        // Token missing or invalid - no action needed. The user will be
-        // prompted to log in when they navigate to a protected route.
+        // Token missing or invalid
+      } finally {
+        await loadBackendAdminData();
       }
     };
-    validateAdminSession();
-    if (getAdminToken()) {
-      loadBackendAdminData();
-    } else {
-      setDataLoading(false);
-    }
+    initSession();
 
     // Keep all role panels fresh while they are open. Search typeahead is
     // server-backed for immediate results; this interval keeps the tables and

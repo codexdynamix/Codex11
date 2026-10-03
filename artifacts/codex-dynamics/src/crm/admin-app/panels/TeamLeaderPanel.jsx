@@ -760,7 +760,7 @@ function TeamLeaderPanel({ data, setData, currentUser, createAgent, canCreateAge
 
       <div className="crm-super-admin-header crm-role-panel-header" style={{ marginBottom: 20 }}>
         <div className="crm-super-admin-tabs">
-          {[['overview', 'Overview'], ['agents', 'Agents'], ['leads', 'Leads'], ['assign', 'Assign']].map(([key, label]) => (
+          {[['overview', 'Overview'], ['agents', 'Agents'], ['leads', 'Client Management'], ['assign', 'Assign']].map(([key, label]) => (
             <button key={key} className={`crm-super-admin-tab-btn ${activeTab === key ? 'crm-active' : ''}`} onClick={() => setActiveTab(key)}>{label}</button>
           ))}
         </div>

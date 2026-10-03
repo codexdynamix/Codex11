@@ -340,9 +340,9 @@ function AgentPanel({ data, currentUser, setData, setUserLoginState, createLead,
               key={tab}
               className={`crm-super-admin-tab-btn ${activeTab === tab ? 'crm-active' : ''}`}
               onClick={() => setActiveTab(tab)}
-              aria-label={`Switch to ${tab}`}
+              aria-label={`Switch to ${tab === 'leads' ? 'Client Management' : tab}`}
             >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab === 'leads' ? 'Client Management' : (tab.charAt(0).toUpperCase() + tab.slice(1))}
             </button>
           ))}
         </div>
@@ -961,18 +961,47 @@ function LeadProfilePage({ role, viewingUser, data, updateLead, showNotification
                 const notifications = await getLeadNotificationsAsAdmin(lead.id);
                 sessionStorage.setItem('codex_impersonate_notifications', JSON.stringify(notifications));
               } catch (_) { /* non-fatal */ }
-              try { sessionStorage.setItem('codex_impersonate_lead', JSON.stringify(lead)); } catch (_) {}
-              window.location.href = `${window.location.origin}/login?impersonateLeadId=${encodeURIComponent(lead.id)}`;
+
+              const clientId = lead.id;
+              const clientName = lead.name || `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || 'Client';
+              const clientEmail = (lead.email || '').toLowerCase().trim();
+              const token = `cdx_sess_${clientId}_${Date.now()}`;
+              const portalClient = {
+                id: clientId,
+                name: clientName,
+                company: lead.company || clientName,
+                email: clientEmail,
+                phone: lead.phone || '',
+                address: lead.address || '',
+                country: lead.country || 'United Kingdom',
+                countryCode: lead.countryCode || 'GB',
+                status: lead.status || 'Active',
+                portalEnabled: true,
+                tier: lead.tier || 'Enterprise Partner',
+                lastLoginAt: new Date().toISOString(),
+                createdAt: lead.createdAt || new Date().toISOString(),
+              };
+
+              localStorage.setItem('cdx_portal_session_token_v2', token);
+              localStorage.setItem('cdx_portal_session_client_v2', JSON.stringify(portalClient));
+              localStorage.setItem('codex_client_token', token);
+              localStorage.setItem('codex_client_user', JSON.stringify(portalClient));
+              sessionStorage.removeItem('cdx_portal_logged_out');
+              sessionStorage.setItem('codex_impersonating_admin', 'true');
+              sessionStorage.setItem('codex_impersonating_client_name', clientName);
+              sessionStorage.setItem('codex_impersonate_lead', JSON.stringify(lead));
+
+              window.location.href = `${window.location.origin}/portal/dashboard`;
             }}
           >
-            Enter Lead Account
+            Enter Client Account
           </button>
         </div>
         <div className="crm-profile-action-buttons">
           <button type="button" className="crm-action-btn crm-activity-btn" onClick={() => setShowActivityModal(true)} title="View client activity"><PaIcon name="activity" />Activity</button>
           <button type="button" className="crm-action-btn crm-appointment-btn" onClick={() => setShowAppointmentModal(true)} title="Schedule appointment"><PaIcon name="appointment" />Appointments</button>
-          <button type="button" className="crm-action-btn crm-security-btn" onClick={() => setShowSecurityModal(true)} title="Lead security settings"><PaIcon name="security" />Lead Security</button>
-          <button type="button" className="crm-action-btn crm-support-btn" onClick={() => setShowChatModal(true)} title="Open support chat"><PaIcon name="support" />Lead Support</button>
+          <button type="button" className="crm-action-btn crm-security-btn" onClick={() => setShowSecurityModal(true)} title="Client security settings"><PaIcon name="security" />Client Security</button>
+          <button type="button" className="crm-action-btn crm-support-btn" onClick={() => setShowChatModal(true)} title="Open support chat"><PaIcon name="support" />Client Support</button>
         </div>
       </div>
 
@@ -1189,7 +1218,7 @@ function LeadProfilePage({ role, viewingUser, data, updateLead, showNotification
         <div className="crm-modal-overlay" onClick={() => setShowSecurityModal(false)}>
           <div className="crm-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="crm-modal-header">
-              <h3>Lead Security - {lead.firstName} {lead.lastName}</h3>
+              <h3>Client Security - {lead.firstName} {lead.lastName}</h3>
               <button className="crm-small-btn" onClick={() => setShowSecurityModal(false)}>Close</button>
             </div>
             <div className="crm-field-group" style={{ marginBottom: 12 }}>

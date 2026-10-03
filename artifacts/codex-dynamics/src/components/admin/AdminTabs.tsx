@@ -32,7 +32,7 @@ export function AdminTabs({ activeTab, setActiveTab, stats }: AdminTabsProps) {
     },
     {
       id: "enquiries" as const,
-      label: "Inquiries & Leads",
+      label: "Inquiries & Clients",
       icon: Inbox,
       count: stats.totalEnquiries,
     },

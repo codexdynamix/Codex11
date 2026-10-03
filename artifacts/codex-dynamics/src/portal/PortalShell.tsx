@@ -93,6 +93,24 @@ export function PortalShell({ currentPath, onNavigate, children }: PortalShellPr
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-[#F5F5F7] dark:bg-[#000000] text-[#1D1D1F] dark:text-[#F5F5F7] flex flex-col font-sans transition-colors duration-200">
+      {typeof window !== 'undefined' && sessionStorage.getItem('codex_impersonating_admin') === 'true' && (
+        <div className="bg-[#0071E3] text-white px-4 py-2 text-xs flex items-center justify-between font-medium shadow-sm z-50 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="bg-white/20 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">Admin Control</span>
+            <span>Viewing Client Portal as <strong>{client.name}</strong> ({client.company}) — Password Bypassed</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              sessionStorage.removeItem('codex_impersonating_admin');
+              window.location.href = '/admin';
+            }}
+            className="bg-white text-[#0071E3] hover:bg-white/90 px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-colors shadow-xs"
+          >
+            Return to Admin Panel ➔
+          </button>
+        </div>
+      )}
       {/* 
         UNIFIED TOP HEADER ACROSS ENTIRE PAGE:
         The single continuous bottom border (border-b) guarantees that the sidebar header 

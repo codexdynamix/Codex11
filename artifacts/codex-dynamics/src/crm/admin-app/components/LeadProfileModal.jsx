@@ -250,7 +250,7 @@ export default function LeadProfileModal({
   const enterLeadAccount = async () => {
     try {
       if (!lead || !lead.id) {
-        showNotification('Invalid lead.');
+        showNotification('Invalid client.');
         return;
       }
       try {
@@ -259,15 +259,41 @@ export default function LeadProfileModal({
       } catch (_) {
         /* non-fatal */
       }
-      try {
-        sessionStorage.setItem('codex_impersonate_lead', JSON.stringify(lead));
-      } catch (storageErr) {
-        console.warn('Could not stash lead for impersonation:', storageErr);
-      }
-      window.location.href = `${window.location.origin}/login?impersonateLeadId=${encodeURIComponent(lead.id)}`;
+
+      const clientId = lead.id;
+      const clientName = lead.name || `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || 'Client';
+      const clientEmail = (lead.email || '').toLowerCase().trim();
+      const token = `cdx_sess_${clientId}_${Date.now()}`;
+      const portalClient = {
+        id: clientId,
+        name: clientName,
+        company: lead.company || clientName,
+        email: clientEmail,
+        phone: lead.phone || '',
+        address: lead.address || '',
+        country: lead.country || 'United Kingdom',
+        countryCode: lead.countryCode || 'GB',
+        status: lead.status || 'Active',
+        portalEnabled: true,
+        tier: lead.tier || 'Enterprise Partner',
+        lastLoginAt: new Date().toISOString(),
+        createdAt: lead.createdAt || new Date().toISOString(),
+      };
+
+      // Set directly into localStorage so portalAuth.readPortalSession() restores immediately
+      localStorage.setItem('cdx_portal_session_token_v2', token);
+      localStorage.setItem('cdx_portal_session_client_v2', JSON.stringify(portalClient));
+      localStorage.setItem('codex_client_token', token);
+      localStorage.setItem('codex_client_user', JSON.stringify(portalClient));
+      sessionStorage.removeItem('cdx_portal_logged_out');
+      sessionStorage.setItem('codex_impersonating_admin', 'true');
+      sessionStorage.setItem('codex_impersonating_client_name', clientName);
+      sessionStorage.setItem('codex_impersonate_lead', JSON.stringify(lead));
+
+      window.location.href = `${window.location.origin}/portal/dashboard`;
     } catch (err) {
-      console.error('Failed to enter lead account:', err);
-      showNotification('Could not enter lead account.');
+      console.error('Failed to enter client account:', err);
+      showNotification('Could not enter client account.');
     }
   };
 
@@ -439,7 +465,7 @@ export default function LeadProfileModal({
     }
   };
 
-  const displayName = lead.name || `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || 'Lead Profile';
+  const displayName = lead.name || `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || 'Client Profile';
   const submissionTime = lead.createdAt || lead.registeredDate;
 
   return (
@@ -565,9 +591,9 @@ export default function LeadProfileModal({
                   minWidth: 120,
                 }}
                 onClick={enterLeadAccount}
-                title="Log in to this client's own portal account"
+                title="Log in directly to this client's portal account (bypassing password)"
               >
-                Enter Account
+                Enter Client Account
               </button>
               <button
                 onClick={onClose}
@@ -661,7 +687,7 @@ export default function LeadProfileModal({
           >
             {[
               { id: 'overview', label: '📋 Profile & Scope', color: '#0A84FF' },
-              { id: 'security', label: '🔒 Lead Security', color: '#FF453A' },
+              { id: 'security', label: '🔒 Client Security', color: '#FF453A' },
               { id: 'chat', label: `💬 Client Support ${chatMessages.length ? `(${chatMessages.length})` : ''}`, color: '#30D158' },
               { id: 'activity', label: '📊 Client Activity', color: '#0A84FF' },
             ].map((tab) => {
@@ -1133,7 +1159,7 @@ export default function LeadProfileModal({
             {/* Column 1: Core Details */}
             <div style={{ background: 'rgba(255, 255, 255, 0.03)', borderRadius: 12, padding: 18, border: '1px solid var(--crm-border, rgba(255, 255, 255, 0.08))' }}>
               <div style={{ fontSize: 11, color: 'var(--crm-text-secondary, #8E8E93)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 12 }}>
-                Lead Details
+                Client Details
               </div>
               {[
                 ['Country', lead.country || '-'],

@@ -173,7 +173,7 @@ export function AdminSidebar({
       items: [
         {
           id: "leads" as const,
-          label: "CRM Leads",
+          label: "Client Management",
           icon: Users,
           count: stats.totalLeads ?? 0,
           badgeLive: (stats.newLeads ?? 0) > 0,

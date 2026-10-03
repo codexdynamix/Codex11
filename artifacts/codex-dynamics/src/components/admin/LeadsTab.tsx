@@ -265,10 +265,10 @@ export function LeadsTab({
               </span>
               <div>
                 <h2 className="text-base font-semibold text-neutral-900 tracking-tight">
-                  Qualified CRM Leads & Contact Database
+                  Client Management & CRM Accounts
                 </h2>
                 <p className="text-xs text-neutral-500">
-                  Prospects collected from visitor promotions, contact forms, and engaged blog readers.
+                  Clients and prospects collected from onboarding, contact forms, and client portal signups.
                 </p>
               </div>
             </div>
@@ -290,7 +290,7 @@ export function LeadsTab({
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs font-semibold transition-all shadow-xs active:scale-[0.98] cursor-pointer"
             >
               <Plus className="size-3.5" />
-              <span>Add Lead</span>
+              <span>Add Client</span>
             </button>
           </div>
         </div>
@@ -298,7 +298,7 @@ export function LeadsTab({
         {/* 4 Metric Highlights */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
           <div className="p-3.5 rounded-xl bg-neutral-50/70 border border-black/[0.05] shadow-2xs">
-            <span className="text-[11px] text-neutral-500 uppercase font-semibold">Total Leads</span>
+            <span className="text-[11px] text-neutral-500 uppercase font-semibold">Total Clients</span>
             <div className="flex items-baseline gap-2 mt-1">
               <span className="text-xl font-bold font-mono text-neutral-900">{totalCount}</span>
               <span className="text-[11px] text-emerald-600 font-medium">{newCount} new</span>
@@ -340,7 +340,7 @@ export function LeadsTab({
               <Search className="size-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
               <input
                 type="text"
-                placeholder="Search leads by name, email, company, city..."
+                placeholder="Search clients by name, email, company, city..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full bg-white border border-black/[0.08] focus:border-[#0071E3] rounded-xl pl-8 pr-3 py-1.5 text-xs text-neutral-900 placeholder:text-neutral-400 transition-all outline-none"
@@ -380,7 +380,7 @@ export function LeadsTab({
           </div>
 
           <div className="text-xs text-neutral-500">
-            Showing <strong className="text-neutral-900">{filteredLeads.length}</strong> of {leads.length} leads
+            Showing <strong className="text-neutral-900">{filteredLeads.length}</strong> of {leads.length} clients
           </div>
         </div>
 
@@ -389,7 +389,7 @@ export function LeadsTab({
           <table className="w-full text-left text-xs text-neutral-900">
             <thead className="bg-[#F9F9FB] text-neutral-500 text-[11px] uppercase font-semibold tracking-wider border-b border-black/[0.06]">
               <tr>
-                <th className="py-3 px-4 font-medium">Lead Name & Company</th>
+                <th className="py-3 px-4 font-medium">Client Name & Company</th>
                 <th className="py-3 px-4 font-medium">Contact Details</th>
                 <th className="py-3 px-4 font-medium">Source Channel</th>
                 <th className="py-3 px-4 font-medium">Location & Address</th>
@@ -541,6 +541,44 @@ export function LeadsTab({
                     {/* Actions */}
                     <td className="py-3.5 px-4 whitespace-nowrap text-right">
                       <div className="inline-flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const clientId = String(l.id);
+                            const clientName = l.name || 'Client';
+                            const clientEmail = (l.email || '').toLowerCase().trim();
+                            const token = `cdx_sess_${clientId}_${Date.now()}`;
+                            const portalClient = {
+                              id: clientId,
+                              name: clientName,
+                              company: l.company || clientName,
+                              email: clientEmail,
+                              phone: l.phone || '',
+                              address: '',
+                              country: l.country || 'United Kingdom',
+                              countryCode: 'GB',
+                              status: 'Active',
+                              portalEnabled: true,
+                              tier: 'Enterprise Partner',
+                              lastLoginAt: new Date().toISOString(),
+                              createdAt: l.created_at || new Date().toISOString(),
+                            };
+                            localStorage.setItem('cdx_portal_session_token_v2', token);
+                            localStorage.setItem('cdx_portal_session_client_v2', JSON.stringify(portalClient));
+                            localStorage.setItem('codex_client_token', token);
+                            localStorage.setItem('codex_client_user', JSON.stringify(portalClient));
+                            sessionStorage.removeItem('cdx_portal_logged_out');
+                            sessionStorage.setItem('codex_impersonating_admin', 'true');
+                            sessionStorage.setItem('codex_impersonating_client_name', clientName);
+                            sessionStorage.setItem('codex_impersonate_lead', JSON.stringify(l));
+                            window.location.href = '/portal/dashboard';
+                          }}
+                          className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors cursor-pointer"
+                          title="Enter Client Account directly without password"
+                        >
+                          Enter Portal
+                        </button>
+
                         {l.email ? (
                           <a
                             href={`mailto:${l.email}`}
@@ -566,12 +604,12 @@ export function LeadsTab({
                         <button
                           type="button"
                           onClick={() => {
-                            if (confirm(`Are you sure you want to remove lead "${l.name}"?`)) {
+                            if (confirm(`Are you sure you want to remove client "${l.name}"?`)) {
                               void onDeleteLead(l.id);
                             }
                           }}
                           className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors cursor-pointer"
-                          title="Delete Lead"
+                          title="Delete Client"
                         >
                           <Trash2 className="size-3.5" />
                         </button>

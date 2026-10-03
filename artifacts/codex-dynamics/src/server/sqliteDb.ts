@@ -379,6 +379,31 @@ function initSqlSchema(db: SqliteDbInstance) {
     );
   `);
 
+  // 19. Offices Table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS offices (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      manager_id TEXT,
+      manager_name TEXT,
+      manager_email TEXT,
+      created_at TEXT
+    );
+  `);
+
+  // 20. Teams Table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS teams (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      office_id TEXT,
+      leader_id TEXT,
+      leader_name TEXT,
+      max_size INTEGER DEFAULT 10,
+      created_at TEXT
+    );
+  `);
+
   // Seed Initial SQL Data if empty
   seedSqlData(db);
 }
@@ -995,5 +1020,26 @@ function seedSqlData(db: SqliteDbInstance) {
     insertFile.run('file_vance_02', 'client_vance', 'Vance_LP_Architecture_Diagram_Signed.pdf', 'Contracts & SOWs', '2.1 MB', '2026-08-15', 'pdf', '#download_architecture');
     insertFile.run('file_brody_01', 'client_brody', 'Brody_Luxury_Product_Catalog_Final.pdf', 'Designs & Branding', '14.2 MB', '2026-08-20', 'pdf', '#download_brody_catalog');
     insertFile.run('file_brody_02', 'client_brody', '3D_Assets_AssetPack_GLTF.zip', 'Deliverables', '68.9 MB', '2026-09-15', 'zip', '#download_3d_pack');
+  }
+
+  // Seed Offices & Teams
+  const officeCount = db.prepare('SELECT COUNT(*) as cnt FROM offices').get() as { cnt: number };
+  if (officeCount.cnt === 0) {
+    const insertOffice = db.prepare(`
+      INSERT INTO offices (id, name, manager_id, manager_name, manager_email, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    insertOffice.run('of_london', 'London Operations', 'adm_om', 'Olivia Manager', 'manager@codexdynamics.com', now);
+    insertOffice.run('of_newyork', 'New York Hub', null, 'Unassigned', '', now);
+  }
+
+  const teamCount = db.prepare('SELECT COUNT(*) as cnt FROM teams').get() as { cnt: number };
+  if (teamCount.cnt === 0) {
+    const insertTeam = db.prepare(`
+      INSERT INTO teams (id, name, office_id, leader_id, leader_name, max_size, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    insertTeam.run('tm_alpha', 'Alpha Strategy', 'of_london', 'adm_tl', 'Thomas Leader', 10, now);
+    insertTeam.run('tm_beta', 'Beta Enterprise', 'of_newyork', null, 'Unassigned', 10, now);
   }
 }

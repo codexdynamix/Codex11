@@ -126,28 +126,52 @@ function AllLeadsTable({ data, currentUser, setData, setLeadAssignment, showNoti
     setQuickAssignAgentId('');
   };
 
-  // Enter lead's own account (admin impersonation - no password required)
+  // Enter client's own account (admin direct access - no password required)
   const enterLeadAccount = async (lead) => {
     try {
       if (!lead || !lead.id) {
-        showNotification('Invalid lead.');
+        showNotification('Invalid client.');
         return;
       }
-      // Pre-fetch client's real notifications so they appear in the impersonated view.
-      // This runs in the background - a failure here should never block impersonation.
       try {
         const notifications = await getLeadNotificationsAsAdmin(lead.id);
         sessionStorage.setItem('codex_impersonate_notifications', JSON.stringify(notifications));
       } catch (_) { /* non-fatal */ }
-      try {
-        sessionStorage.setItem('codex_impersonate_lead', JSON.stringify(lead));
-      } catch (storageErr) {
-        console.warn('Could not stash lead for impersonation:', storageErr);
-      }
-      window.location.href = `${window.location.origin}/login?impersonateLeadId=${encodeURIComponent(lead.id)}`;
+
+      const clientId = lead.id;
+      const clientName = lead.name || `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || 'Client';
+      const clientEmail = (lead.email || '').toLowerCase().trim();
+      const token = `cdx_sess_${clientId}_${Date.now()}`;
+      const portalClient = {
+        id: clientId,
+        name: clientName,
+        company: lead.company || clientName,
+        email: clientEmail,
+        phone: lead.phone || '',
+        address: lead.address || '',
+        country: lead.country || 'United Kingdom',
+        countryCode: lead.countryCode || 'GB',
+        status: lead.status || 'Active',
+        portalEnabled: true,
+        tier: lead.tier || 'Enterprise Partner',
+        lastLoginAt: new Date().toISOString(),
+        createdAt: lead.createdAt || new Date().toISOString(),
+      };
+
+      // Set directly into localStorage so portalAuth.readPortalSession() restores immediately
+      localStorage.setItem('cdx_portal_session_token_v2', token);
+      localStorage.setItem('cdx_portal_session_client_v2', JSON.stringify(portalClient));
+      localStorage.setItem('codex_client_token', token);
+      localStorage.setItem('codex_client_user', JSON.stringify(portalClient));
+      sessionStorage.removeItem('cdx_portal_logged_out');
+      sessionStorage.setItem('codex_impersonating_admin', 'true');
+      sessionStorage.setItem('codex_impersonating_client_name', clientName);
+      sessionStorage.setItem('codex_impersonate_lead', JSON.stringify(lead));
+
+      window.location.href = `${window.location.origin}/portal/dashboard`;
     } catch (err) {
-      console.error('Failed to enter lead account:', err);
-      showNotification('Could not enter lead account.');
+      console.error('Failed to enter client account:', err);
+      showNotification('Could not enter client account.');
     }
   };
 
@@ -1372,7 +1396,7 @@ function AllLeadsTable({ data, currentUser, setData, setLeadAssignment, showNoti
           )}
 
           <div style={{ fontSize: 12, color: 'var(--crm-text-secondary)', marginBottom: 8 }}>
-            Click any row to open the lead profile. Showing {paged.length} of {filtered.length} leads (page {page}/{totalPages})
+            Click any row to open the client profile. Showing {paged.length} of {filtered.length} clients (page {page}/{totalPages})
           </div>
 
           <div className="crm-admin-table-container">
@@ -1496,9 +1520,15 @@ function AllLeadsTable({ data, currentUser, setData, setLeadAssignment, showNoti
                     <td onClick={e => e.stopPropagation()} style={{ whiteSpace: 'nowrap' }}>
                       <button
                         className="crm-super-admin-btn crm-super-admin-btn-small"
+                        style={{ fontSize: 11, padding: '4px 10px', background: 'rgba(48, 209, 88, 0.15)', color: '#30D158', border: '1px solid rgba(48, 209, 88, 0.3)', fontWeight: 600, marginRight: 4 }}
+                        onClick={() => enterLeadAccount(lead)}
+                        title="Enter client portal directly (no password needed)"
+                      >🚀 Enter Portal</button>
+                      <button
+                        className="crm-super-admin-btn crm-super-admin-btn-small"
                         style={{ fontSize: 11, padding: '4px 10px', background: '#3a7bd5', color: '#fff', fontWeight: 600 }}
                         onClick={() => { setEditingLead(lead); }}
-                        title="Edit lead profile fields"
+                        title="Edit client profile fields"
                       > Edit</button>
                       <button className="crm-super-admin-btn crm-super-admin-btn-small" style={{ fontSize: 11, padding: '4px 10px', marginLeft: 4, background: '#c0392b', color: '#fff' }} onClick={() => deleteLead(lead)} title="Move to Recycle Bin">🗑 Bin</button>
                     </td>
@@ -2514,8 +2544,8 @@ function SuperAdminPanel({ data, currentUser, setData, assignOfficeManager, crea
   const [staffSubTab, setStaffSubTab] = useState('Staff');
   const [activeSubTab, setActiveSubTab] = useState(() => {
     const saved = sessionStorage.getItem('sa_activeSubTab');
-    const allowed = ['Lead Management', 'Lead Upload', 'Notifications'];
-    return allowed.includes(saved) ? saved : 'Lead Management';
+    const allowed = ['Client Management', 'Lead Management', 'Lead Upload', 'Notifications'];
+    return allowed.includes(saved) ? (saved === 'Lead Management' ? 'Client Management' : saved) : 'Client Management';
   });
   const tabsScrollRef = useRef(null);
   const scrollTabs = (dir) => {
@@ -2554,7 +2584,7 @@ function SuperAdminPanel({ data, currentUser, setData, assignOfficeManager, crea
 
   const tabs = [
     { name: 'Dashboard', icon: faTachometerAlt },
-    { name: 'Leads', icon: faUsers },
+    { name: 'Client Management', icon: faUsers },
     { name: 'Staff', icon: faUsers },
     { name: 'Sessions', icon: faUsers },
     { name: 'Recycle Bin', icon: faTrash },
@@ -2831,13 +2861,13 @@ function SuperAdminPanel({ data, currentUser, setData, assignOfficeManager, crea
   };
   const renderLeadWorkspaceTabs = () => (
     <div className="crm-tab-row">
-      <button className={"crm-tab-btn " + (activeTab === 'Leads' && activeSubTab === 'Lead Management' ? 'crm-active' : '')} onClick={() => { setActiveTab('Leads'); setActiveSubTab('Lead Management'); }}>
-        Lead Management
+      <button className={"crm-tab-btn " + ((activeTab === 'Client Management' || activeTab === 'Leads') && (activeSubTab === 'Client Management' || activeSubTab === 'Lead Management') ? 'crm-active' : '')} onClick={() => { setActiveTab('Client Management'); setActiveSubTab('Client Management'); }}>
+        Client Management
       </button>
-      <button className={"crm-tab-btn " + (activeTab === 'Leads' && activeSubTab === 'Lead Upload' ? 'crm-active' : '')} onClick={() => { setActiveTab('Leads'); setActiveSubTab('Lead Upload'); }}>
-        Lead Upload
+      <button className={"crm-tab-btn " + ((activeTab === 'Client Management' || activeTab === 'Leads') && activeSubTab === 'Lead Upload' ? 'crm-active' : '')} onClick={() => { setActiveTab('Client Management'); setActiveSubTab('Lead Upload'); }}>
+        Client Import
       </button>
-      <button className={"crm-tab-btn " + (activeTab === 'Leads' && activeSubTab === 'Notifications' ? 'crm-active' : '')} onClick={() => { setActiveTab('Leads'); setActiveSubTab('Notifications'); }}>
+      <button className={"crm-tab-btn " + ((activeTab === 'Client Management' || activeTab === 'Leads') && activeSubTab === 'Notifications' ? 'crm-active' : '')} onClick={() => { setActiveTab('Client Management'); setActiveSubTab('Notifications'); }}>
         Notifications
       </button>
       <button className={"crm-tab-btn " + (activeTab === 'Enquiries' ? 'crm-active' : '')} onClick={() => setActiveTab('Enquiries')}>
@@ -2904,15 +2934,15 @@ function SuperAdminPanel({ data, currentUser, setData, assignOfficeManager, crea
                 </p>
                 <Sessions token={getAdminToken()} />
               </div>
-            ) : activeTab === 'Leads' ? (
+            ) : (activeTab === 'Client Management' || activeTab === 'Leads') ? (
               <div className="leads-content">
                 {renderLeadWorkspaceTabs()}
-                {activeSubTab === 'Lead Management' ? (
+                {activeSubTab === 'Client Management' || activeSubTab === 'Lead Management' ? (
                   <div>
                     <div className="crm-super-admin-card">
-                      <h2 style={{ marginBottom: 6 }}>[users] Lead Management</h2>
+                      <h2 style={{ marginBottom: 6 }}>👥 Client Management</h2>
                       <p style={{ color: 'var(--crm-text-secondary)', fontSize: 13, marginBottom: 20 }}>
-                        Leads are the single account source visible to agents, teams, and offices - filtered by their scope. Here you see every record system-wide.
+                        Clients and leads are the central account source visible to agents, teams, and offices - filtered by their scope. Here you see every record system-wide.
                       </p>
                       <AllLeadsTable data={data} currentUser={currentUser} setData={setData} setLeadAssignment={setLeadAssignment} showNotification={showNotification} onOpenProfile={openLeadProfile} />
                     </div>
@@ -3029,7 +3059,7 @@ function SuperAdminPanel({ data, currentUser, setData, assignOfficeManager, crea
                         {importResults && (
                           <div style={{ background: 'rgba(69,210,160,0.08)', border: '1px solid #45d2a030', borderRadius: 8, padding: 14, marginTop: 12, textAlign: 'center' }}>
                             <div style={{ color: '#45d2a0', fontWeight: 700 }}>OK {importResults.count} leads imported</div>
-                            <div style={{ color: 'var(--crm-text-secondary)', fontSize: 12, marginTop: 4 }}>They now appear in Lead Management</div>
+                            <div style={{ color: 'var(--crm-text-secondary)', fontSize: 12, marginTop: 4 }}>They now appear in Client Management</div>
                           </div>
                         )}
                       </div>
@@ -3701,7 +3731,7 @@ function SuperAdminPanel({ data, currentUser, setData, assignOfficeManager, crea
                   {[
                     isOffice && { label: 'Teams', value: teamsList.length, color: '#0A84FF' },
                     { label: 'Agents', value: agentsList.length, color: 'var(--crm-accent)' },
-                    { label: 'Leads', value: leadsList.length, color: 'var(--crm-text-primary)' },
+                    { label: 'Clients', value: leadsList.length, color: 'var(--crm-text-primary)' },
                     { label: 'Deposits', value: deposits, color: '#0ECB81' },
                   ].filter(Boolean).map(s => (
                     <div key={s.label} style={{ background: 'var(--crm-card)', border: '1px solid var(--crm-border)', borderRadius: 6, padding: '10px 14px' }}>

@@ -3334,7 +3334,7 @@ export default function SiteSettingsTab({ showNotification = () => {} }) {
                   className="crm-settings-input"
                   value={siteConfig.seo.keywords}
                   onChange={e => updateNestedField('seo', 'keywords', e.target.value)}
-                  placeholder="CRM, Enterprise Software, Lead Management, Fintech Architecture"
+                  placeholder="CRM, Enterprise Software, Client Management, Fintech Architecture"
                 />
               </div>
 

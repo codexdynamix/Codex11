@@ -30,9 +30,44 @@ export function ClientPortalApp() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const p = window.location.pathname;
-      if (p === '/portal' || p === '/portal/' || p === '/client' || p === '/client/') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const impersonateId = urlParams.get('impersonateClientId') || urlParams.get('impersonateLeadId');
+      if (impersonateId) {
+        let clientData: any = null;
+        try {
+          const raw = sessionStorage.getItem('codex_impersonate_lead');
+          if (raw) clientData = JSON.parse(raw);
+        } catch (_) {}
+        const id = impersonateId;
+        const name = clientData?.name || clientData?.company || 'Client';
+        const email = clientData?.email || '';
+        const token = `cdx_sess_${id}_${Date.now()}`;
+        const portalClient = {
+          id,
+          name,
+          company: clientData?.company || name,
+          email,
+          phone: clientData?.phone || '',
+          address: clientData?.address || '',
+          country: clientData?.country || 'United Kingdom',
+          countryCode: clientData?.countryCode || 'GB',
+          status: 'Active' as const,
+          portalEnabled: true,
+          tier: (clientData?.tier || 'Enterprise Partner') as any,
+          lastLoginAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+        };
+        setPortalSession(portalClient);
+        sessionStorage.setItem('codex_impersonating_admin', 'true');
+        sessionStorage.setItem('codex_impersonating_client_name', name);
         window.history.replaceState({}, '', '/portal/dashboard');
+        setCurrentPath('/portal/dashboard');
+        setSession(readPortalSession());
+      } else {
+        const p = window.location.pathname;
+        if (p === '/portal' || p === '/portal/' || p === '/client' || p === '/client/') {
+          window.history.replaceState({}, '', '/portal/dashboard');
+        }
       }
     }
 

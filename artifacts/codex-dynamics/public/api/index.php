@@ -350,5 +350,383 @@ if ($apiPath === '/admin/audit' || preg_match('#^/admin/users/([^/]+)/profile-hi
     jsonResponse(['ok' => true, 'log' => $rows, 'history' => $rows, 'total' => count($rows)]);
 }
 
+// -----------------------------------------------------------------------------
+// 9. ADMIN: OFFICES MANAGEMENT
+// -----------------------------------------------------------------------------
+if ($apiPath === '/admin/offices') {
+    if ($method === 'POST') {
+        $id = 'of_' . time() . '_' . substr(bin2hex(random_bytes(2)), 0, 4);
+        $name = trim($input['name'] ?? 'New Office');
+        $now = date('c');
+        $manager = null;
+        $managerId = null;
+        $managerName = trim($input['manager_name'] ?? 'Unassigned');
+        $managerEmail = trim($input['manager_email'] ?? '');
+
+        if (!empty($input['manager_name']) && !empty($input['manager_password'])) {
+            $managerId = 'adm_' . time() . '_' . substr(bin2hex(random_bytes(2)), 0, 4);
+            $managerEmail = $managerEmail ?: "manager_" . time() . "@codexdynamics.com";
+            $caps = json_encode(['lead_upload' => true, 'create_agent' => true, 'registrations' => true, 'notifications' => true, 'content' => true, 'enquiries' => true, 'chat' => true]);
+            $pdo->prepare("INSERT INTO staff_users (id, email, password, name, role, office_id, team_id, status, capabilities, created_at) VALUES (?, ?, ?, ?, 'Office Manager', ?, NULL, 'Active', ?, ?)")
+                ->execute([$managerId, $managerEmail, $input['manager_password'], $managerName, $id, $caps, $now]);
+            $manager = ['id' => $managerId, 'name' => $managerName, 'email' => $managerEmail, 'role' => 'Office Manager', 'office_id' => $id];
+        }
+
+        $pdo->prepare("INSERT INTO offices (id, name, manager_id, manager_name, manager_email, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+            ->execute([$id, $name, $managerId, $managerName, $managerEmail, $now]);
+        $createdOffice = ['id' => $id, 'name' => $name, 'manager_id' => $managerId, 'manager_name' => $managerName, 'manager_email' => $managerEmail, 'team_count' => 0, 'agent_count' => 0, 'lead_count' => 0, 'created_at' => $now];
+        jsonResponse(['ok' => true, 'office' => $createdOffice, 'manager' => $manager]);
+    }
+
+    $offices = $pdo->query("SELECT * FROM offices ORDER BY created_at DESC")->fetchAll();
+    foreach ($offices as &$o) {
+        $stmtT = $pdo->prepare("SELECT COUNT(*) FROM teams WHERE office_id = ?");
+        $stmtT->execute([$o['id']]);
+        $o['team_count'] = (int)$stmtT->fetchColumn();
+
+        $stmtA = $pdo->prepare("SELECT COUNT(*) FROM staff_users WHERE office_id = ? AND role = 'Agent'");
+        $stmtA->execute([$o['id']]);
+        $o['agent_count'] = (int)$stmtA->fetchColumn();
+
+        $stmtL = $pdo->prepare("SELECT COUNT(*) FROM leads WHERE assigned_office_id = ?");
+        $stmtL->execute([$o['id']]);
+        $o['lead_count'] = (int)$stmtL->fetchColumn();
+    }
+    jsonResponse(['ok' => true, 'offices' => $offices]);
+}
+
+if (preg_match('#^/admin/offices/([^/]+)(?:/(manager))?$#', $apiPath, $m)) {
+    $officeId = $m[1];
+    $sub = $m[2] ?? '';
+
+    if ($sub === 'manager' && $method === 'POST') {
+        $managerId = $input['manager_id'] ?? '';
+        $stmtM = $pdo->prepare("SELECT * FROM staff_users WHERE id = ?");
+        $stmtM->execute([$managerId]);
+        $mgr = $stmtM->fetch();
+        if ($mgr) {
+            $pdo->prepare("UPDATE offices SET manager_id = ?, manager_name = ?, manager_email = ? WHERE id = ?")->execute([$mgr['id'], $mgr['name'], $mgr['email'], $officeId]);
+            $pdo->prepare("UPDATE staff_users SET office_id = ? WHERE id = ?")->execute([$officeId, $mgr['id']]);
+        }
+        $stmtO = $pdo->prepare("SELECT * FROM offices WHERE id = ?");
+        $stmtO->execute([$officeId]);
+        jsonResponse(['ok' => true, 'office' => $stmtO->fetch(), 'manager' => $mgr]);
+    }
+
+    if ($method === 'PATCH') {
+        if (!empty($input['name'])) {
+            $pdo->prepare("UPDATE offices SET name = ? WHERE id = ?")->execute([$input['name'], $officeId]);
+        }
+        $stmtO = $pdo->prepare("SELECT * FROM offices WHERE id = ?");
+        $stmtO->execute([$officeId]);
+        jsonResponse(['ok' => true, 'office' => $stmtO->fetch()]);
+    }
+
+    if ($method === 'DELETE') {
+        $pdo->prepare("DELETE FROM offices WHERE id = ?")->execute([$officeId]);
+        jsonResponse(['ok' => true]);
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 10. ADMIN: TEAMS MANAGEMENT
+// -----------------------------------------------------------------------------
+if ($apiPath === '/admin/teams') {
+    if ($method === 'POST') {
+        $id = 'tm_' . time() . '_' . substr(bin2hex(random_bytes(2)), 0, 4);
+        $name = trim($input['name'] ?? 'New Team');
+        $officeId = $input['office_id'] ?? null;
+        $maxSize = (int)($input['max_size'] ?? 10);
+        $now = date('c');
+        $leader = null;
+        $leaderId = null;
+        $leaderName = trim($input['leader_name'] ?? 'Unassigned');
+        $leaderEmail = trim($input['leader_email'] ?? '');
+
+        if (!empty($input['leader_name']) && !empty($input['leader_password'])) {
+            $leaderId = 'adm_' . time() . '_' . substr(bin2hex(random_bytes(2)), 0, 4);
+            $leaderEmail = $leaderEmail ?: "leader_" . time() . "@codexdynamics.com";
+            $caps = json_encode(['lead_upload' => true, 'create_agent' => true, 'registrations' => true, 'notifications' => true, 'content' => true, 'enquiries' => true, 'chat' => true]);
+            $pdo->prepare("INSERT INTO staff_users (id, email, password, name, role, office_id, team_id, status, capabilities, created_at) VALUES (?, ?, ?, ?, 'Team Leader', ?, ?, 'Active', ?, ?)")
+                ->execute([$leaderId, $leaderEmail, $input['leader_password'], $leaderName, $officeId, $id, $caps, $now]);
+            $leader = ['id' => $leaderId, 'name' => $leaderName, 'email' => $leaderEmail, 'role' => 'Team Leader', 'office_id' => $officeId, 'team_id' => $id];
+        }
+
+        $pdo->prepare("INSERT INTO teams (id, name, office_id, leader_id, leader_name, max_size, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+            ->execute([$id, $name, $officeId, $leaderId, $leaderName, $maxSize, $now]);
+        $createdTeam = ['id' => $id, 'name' => $name, 'office_id' => $officeId, 'leader_id' => $leaderId, 'leader_name' => $leaderName, 'max_size' => $maxSize, 'agent_count' => 0, 'lead_count' => 0, 'created_at' => $now];
+        jsonResponse(['ok' => true, 'team' => $createdTeam, 'leader' => $leader]);
+    }
+
+    $teams = $pdo->query("SELECT * FROM teams ORDER BY created_at DESC")->fetchAll();
+    foreach ($teams as &$t) {
+        $stmtA = $pdo->prepare("SELECT COUNT(*) FROM staff_users WHERE team_id = ? AND role = 'Agent'");
+        $stmtA->execute([$t['id']]);
+        $t['agent_count'] = (int)$stmtA->fetchColumn();
+
+        $stmtL = $pdo->prepare("SELECT COUNT(*) FROM leads WHERE assigned_team_id = ?");
+        $stmtL->execute([$t['id']]);
+        $t['lead_count'] = (int)$stmtL->fetchColumn();
+    }
+    jsonResponse(['ok' => true, 'teams' => $teams]);
+}
+
+if (preg_match('#^/admin/teams/([^/]+)$#', $apiPath, $m)) {
+    $teamId = $m[1];
+    if ($method === 'PATCH') {
+        if (!empty($input['name'])) $pdo->prepare("UPDATE teams SET name = ? WHERE id = ?")->execute([$input['name'], $teamId]);
+        if (isset($input['max_size'])) $pdo->prepare("UPDATE teams SET max_size = ? WHERE id = ?")->execute([(int)$input['max_size'], $teamId]);
+        $stmtT = $pdo->prepare("SELECT * FROM teams WHERE id = ?");
+        $stmtT->execute([$teamId]);
+        jsonResponse(['ok' => true, 'team' => $stmtT->fetch()]);
+    }
+    if ($method === 'DELETE') {
+        $pdo->prepare("DELETE FROM teams WHERE id = ?")->execute([$teamId]);
+        jsonResponse(['ok' => true]);
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 11. ADMIN: STAFF (AGENTS, TEAM LEADERS, MANAGERS)
+// -----------------------------------------------------------------------------
+if ($apiPath === '/admin/staff') {
+    if ($method === 'POST') {
+        $id = 'adm_' . time() . '_' . substr(bin2hex(random_bytes(2)), 0, 4);
+        $name = trim($input['name'] ?? 'New Staff');
+        $email = strtolower(trim($input['email'] ?? "agent_" . time() . "@codexdynamics.com"));
+        $password = trim($input['password'] ?? 'admin123');
+        $role = $input['role'] ?? 'Agent';
+        $teamId = $input['team_id'] ?? null;
+        $officeId = $input['office_id'] ?? null;
+        if ($teamId && !$officeId) {
+            $stmtTm = $pdo->prepare("SELECT office_id FROM teams WHERE id = ?");
+            $stmtTm->execute([$teamId]);
+            $officeId = $stmtTm->fetchColumn() ?: null;
+        }
+        $now = date('c');
+        $caps = json_encode(['lead_upload' => true, 'create_agent' => true, 'registrations' => true, 'notifications' => true, 'content' => true, 'enquiries' => true, 'chat' => true]);
+        $pdo->prepare("INSERT INTO staff_users (id, email, password, name, role, office_id, team_id, status, capabilities, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?)")
+            ->execute([$id, $email, $password, $name, $role, $officeId, $teamId, $caps, $now]);
+        jsonResponse(['ok' => true, 'staff' => ['id' => $id, 'name' => $name, 'email' => $email, 'role' => $role, 'office_id' => $officeId, 'team_id' => $teamId, 'status' => 'Active', 'capabilities' => json_decode($caps, true), 'created_at' => $now]]);
+    }
+
+    $staff = $pdo->query("SELECT id, email, name, role, office_id, team_id, status, capabilities, last_login_at, created_at FROM staff_users ORDER BY name ASC")->fetchAll();
+    foreach ($staff as &$s) {
+        if (!empty($s['capabilities']) && is_string($s['capabilities'])) {
+            $s['capabilities'] = json_decode($s['capabilities'], true);
+        }
+    }
+    jsonResponse(['ok' => true, 'staff' => $staff]);
+}
+
+if (preg_match('#^/admin/staff/([^/]+)(?:/(block|unblock))?$#', $apiPath, $m)) {
+    $staffId = $m[1];
+    $action = $m[2] ?? '';
+    if ($action === 'block' && $method === 'POST') {
+        $pdo->prepare("UPDATE staff_users SET status = 'Suspended' WHERE id = ?")->execute([$staffId]);
+        $stmtS = $pdo->prepare("SELECT * FROM staff_users WHERE id = ?");
+        $stmtS->execute([$staffId]);
+        jsonResponse(['ok' => true, 'staff' => $stmtS->fetch()]);
+    }
+    if ($action === 'unblock' && $method === 'POST') {
+        $pdo->prepare("UPDATE staff_users SET status = 'Active' WHERE id = ?")->execute([$staffId]);
+        $stmtS = $pdo->prepare("SELECT * FROM staff_users WHERE id = ?");
+        $stmtS->execute([$staffId]);
+        jsonResponse(['ok' => true, 'staff' => $stmtS->fetch()]);
+    }
+    if ($method === 'PATCH') {
+        if (!empty($input['name'])) $pdo->prepare("UPDATE staff_users SET name = ? WHERE id = ?")->execute([$input['name'], $staffId]);
+        if (!empty($input['email'])) $pdo->prepare("UPDATE staff_users SET email = ? WHERE id = ?")->execute([$input['email'], $staffId]);
+        if (!empty($input['password'])) $pdo->prepare("UPDATE staff_users SET password = ? WHERE id = ?")->execute([$input['password'], $staffId]);
+        if (isset($input['team_id'])) $pdo->prepare("UPDATE staff_users SET team_id = ? WHERE id = ?")->execute([$input['team_id'], $staffId]);
+        $stmtS = $pdo->prepare("SELECT * FROM staff_users WHERE id = ?");
+        $stmtS->execute([$staffId]);
+        jsonResponse(['ok' => true, 'staff' => $stmtS->fetch()]);
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 12. ADMIN: LEAD ASSIGNMENT
+// -----------------------------------------------------------------------------
+if (preg_match('#^/admin/leads/([^/]+)/assign$#', $apiPath, $m) && $method === 'POST') {
+    $leadId = $m[1];
+    $officeId = $input['officeId'] ?? $input['office_id'] ?? null;
+    $teamId = $input['teamId'] ?? $input['team_id'] ?? null;
+    $agentId = $input['agentId'] ?? $input['agent_id'] ?? null;
+    $now = date('c');
+
+    $pdo->prepare("UPDATE leads SET assigned_office_id = ?, assigned_team_id = ?, assigned_agent_id = ?, updated_at = ? WHERE id = ?")
+        ->execute([$officeId, $teamId, $agentId, $now, $leadId]);
+
+    $stmtL = $pdo->prepare("SELECT * FROM leads WHERE id = ?");
+    $stmtL->execute([$leadId]);
+    jsonResponse(['ok' => true, 'lead' => $stmtL->fetch()]);
+}
+
+// -----------------------------------------------------------------------------
+// 13. AUTHENTICATION: STAFF LOGIN
+// -----------------------------------------------------------------------------
+if ($apiPath === '/admin/login' && $method === 'POST') {
+    $email = strtolower(trim($input['email'] ?? ''));
+    $password = trim($input['password'] ?? '');
+
+    $stmt = $pdo->prepare("SELECT * FROM staff_users WHERE LOWER(email) = ?");
+    $stmt->execute([$email]);
+    $staff = $stmt->fetch();
+
+    if (!$staff || $staff['password'] !== $password) {
+        jsonResponse(['ok' => false, 'error' => 'Invalid staff email or password.'], 401);
+    }
+    if ($staff['status'] !== 'Active') {
+        jsonResponse(['ok' => false, 'error' => 'This staff account is currently suspended.'], 403);
+    }
+
+    $now = date('c');
+    $pdo->prepare("UPDATE staff_users SET last_login_at = ? WHERE id = ?")->execute([$now, $staff['id']]);
+    $token = "token_{$staff['id']}_" . time();
+
+    jsonResponse([
+        'ok' => true,
+        'token' => $token,
+        'user' => [
+            'id' => $staff['id'],
+            'name' => $staff['name'],
+            'email' => $staff['email'],
+            'role' => $staff['role'],
+            'office_id' => $staff['office_id'],
+            'team_id' => $staff['team_id'],
+            'officeId' => $staff['office_id'],
+            'teamId' => $staff['team_id'],
+            'status' => $staff['status'],
+            'last_login_at' => $now,
+            'capabilities' => json_decode($staff['capabilities'] ?: '{}', true),
+        ],
+    ]);
+}
+
+// -----------------------------------------------------------------------------
+// 14. AUTHENTICATION: CLIENT PORTAL LOGIN
+// -----------------------------------------------------------------------------
+if ($apiPath === '/portal/login' && $method === 'POST') {
+    $email = strtolower(trim($input['email'] ?? ''));
+    $password = trim($input['password'] ?? '');
+
+    $stmt = $pdo->prepare("SELECT * FROM portal_clients WHERE LOWER(email) = ?");
+    $stmt->execute([$email]);
+    $client = $stmt->fetch();
+
+    if (!$client) {
+        jsonResponse(['ok' => false, 'error' => 'No client account found with this email address.'], 404);
+    }
+    if (empty($client['portal_enabled'])) {
+        jsonResponse(['ok' => false, 'error' => 'This client portal account is currently disabled.'], 403);
+    }
+    if (!empty($client['password']) && $password !== '' && $client['password'] !== $password) {
+        jsonResponse(['ok' => false, 'error' => 'Incorrect password. Please try again.'], 401);
+    }
+
+    $now = date('c');
+    $pdo->prepare("UPDATE portal_clients SET last_login_at = ? WHERE id = ?")->execute([$now, $client['id']]);
+    $token = "cdx_sess_{$client['id']}_" . time();
+
+    jsonResponse([
+        'ok' => true,
+        'token' => $token,
+        'client' => [
+            'id' => $client['id'],
+            'name' => $client['name'],
+            'company' => $client['company'],
+            'email' => $client['email'],
+            'phone' => $client['phone'],
+            'address' => $client['address'],
+            'country' => $client['country'],
+            'countryCode' => $client['country_code'],
+            'status' => $client['status'],
+            'portalEnabled' => (bool)$client['portal_enabled'],
+            'tier' => $client['tier'],
+            'lastLoginAt' => $now,
+            'createdAt' => $client['created_at'],
+        ],
+    ]);
+}
+
+// -----------------------------------------------------------------------------
+// 15. CLIENT PORTAL: COMPLETE DASHBOARD DATA
+// -----------------------------------------------------------------------------
+if ($apiPath === '/portal/data') {
+    $clientId = $_GET['client_id'] ?? '';
+    if (!$clientId) {
+        jsonResponse(['error' => 'Missing client_id parameter'], 400);
+    }
+
+    $stmtC = $pdo->prepare("SELECT * FROM portal_clients WHERE id = ?");
+    $stmtC->execute([$clientId]);
+    $client = $stmtC->fetch() ?: null;
+
+    $stmtW = $pdo->prepare("SELECT * FROM client_websites WHERE client_id = ?");
+    $stmtW->execute([$clientId]);
+    $websites = $stmtW->fetchAll();
+
+    $stmtP = $pdo->prepare("SELECT * FROM client_projects WHERE client_id = ?");
+    $stmtP->execute([$clientId]);
+    $projects = $stmtP->fetchAll();
+
+    $stmtI = $pdo->prepare("SELECT * FROM client_invoices WHERE client_id = ?");
+    $stmtI->execute([$clientId]);
+    $invoices = $stmtI->fetchAll();
+
+    $stmtT = $pdo->prepare("SELECT * FROM client_support_tickets WHERE client_id = ? ORDER BY created_at DESC");
+    $stmtT->execute([$clientId]);
+    $tickets = $stmtT->fetchAll();
+
+    jsonResponse([
+        'ok' => true,
+        'client' => $client,
+        'websites' => $websites,
+        'projects' => $projects,
+        'invoices' => $invoices,
+        'tickets' => $tickets,
+        'notifications' => [],
+    ]);
+}
+
+// -----------------------------------------------------------------------------
+// 16. CLIENT PORTAL: SUPPORT TICKETS
+// -----------------------------------------------------------------------------
+if ($apiPath === '/portal/ticket' && $method === 'POST') {
+    $clientId = $input['clientId'] ?? $input['client_id'] ?? '';
+    $ticketId = $input['ticketId'] ?? $input['ticket_id'] ?? '';
+    $text = trim($input['text'] ?? $input['message'] ?? '');
+    $sender = $input['sender'] ?? 'client';
+    $senderName = $input['senderName'] ?? $input['sender_name'] ?? 'Client';
+    $now = date('c');
+
+    if ($ticketId) {
+        $stmtEx = $pdo->prepare("SELECT * FROM client_support_tickets WHERE id = ?");
+        $stmtEx->execute([$ticketId]);
+        $existing = $stmtEx->fetch();
+        if ($existing) {
+            $msgs = json_decode($existing['messages'] ?: '[]', true) ?: [];
+            $msgs[] = ['id' => 'msg_' . time(), 'sender' => $sender, 'senderName' => $senderName, 'text' => $text, 'createdAt' => $now];
+            $nextStatus = $sender === 'client' ? 'Open' : $existing['status'];
+            $pdo->prepare("UPDATE client_support_tickets SET messages = ?, status = ?, updated_at = ? WHERE id = ?")
+                ->execute([json_encode($msgs), $nextStatus, $now, $ticketId]);
+            jsonResponse(['ok' => true, 'ticket_id' => $ticketId, 'messages' => $msgs]);
+        }
+    } else {
+        $newId = 'tick_' . time();
+        $ticketNum = 'TICK-' . rand(100, 999);
+        $subject = $input['subject'] ?? 'Support Request';
+        $category = $input['category'] ?? 'General';
+        $priority = $input['priority'] ?? 'Medium';
+        $initialMsgs = [['id' => 'msg_' . time(), 'sender' => 'client', 'senderName' => $senderName, 'text' => $text, 'createdAt' => $now]];
+
+        $pdo->prepare("INSERT INTO client_support_tickets (id, client_id, ticket_number, subject, category, priority, status, assigned_agent, messages, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'Open', 'Alex Agent', ?, ?, ?)")
+            ->execute([$newId, $clientId, $ticketNum, $subject, $category, $priority, json_encode($initialMsgs), $now, $now]);
+
+        jsonResponse(['ok' => true, 'ticket_id' => $newId, 'ticket_number' => $ticketNum]);
+    }
+}
+
 // Fallback
 jsonResponse(['ok' => true, 'service' => 'Codex Dynamics API', 'timestamp' => date('c')]);

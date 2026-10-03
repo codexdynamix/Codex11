@@ -398,6 +398,31 @@ function initSchema(PDO $pdo): void {
         );
     ");
 
+    // 19. Offices Table
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS offices (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            manager_id TEXT,
+            manager_name TEXT,
+            manager_email TEXT,
+            created_at TEXT
+        );
+    ");
+
+    // 20. Teams Table
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS teams (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            office_id TEXT,
+            leader_id TEXT,
+            leader_name TEXT,
+            max_size INTEGER DEFAULT 10,
+            created_at TEXT
+        );
+    ");
+
     seedInitialData($pdo);
 }
 
@@ -598,5 +623,28 @@ function seedInitialData(PDO $pdo): void {
             1,
             $now
         ]);
+    }
+
+    // Seed Offices & Teams
+    $officeCount = (int)$pdo->query("SELECT COUNT(*) FROM offices")->fetchColumn();
+    if ($officeCount === 0) {
+        $now = date('c');
+        $stmt = $pdo->prepare("
+            INSERT INTO offices (id, name, manager_id, manager_name, manager_email, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ");
+        $stmt->execute(['of_london', 'London Operations', 'adm_om', 'Olivia Manager', 'manager@codexdynamics.com', $now]);
+        $stmt->execute(['of_newyork', 'New York Hub', null, 'Unassigned', '', $now]);
+    }
+
+    $teamCount = (int)$pdo->query("SELECT COUNT(*) FROM teams")->fetchColumn();
+    if ($teamCount === 0) {
+        $now = date('c');
+        $stmt = $pdo->prepare("
+            INSERT INTO teams (id, name, office_id, leader_id, leader_name, max_size, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ");
+        $stmt->execute(['tm_alpha', 'Alpha Strategy', 'of_london', 'adm_tl', 'Thomas Leader', 10, $now]);
+        $stmt->execute(['tm_beta', 'Beta Enterprise', 'of_newyork', null, 'Unassigned', 10, $now]);
     }
 }

@@ -165,7 +165,7 @@ function BellIcon({ size = 16 }) {
 }
 
 const ROLE_TAB_MAP = {
-  'Super Admin':    { alerts: 'Notifications', messages: 'Leads' },
+  'Super Admin':    { alerts: 'Notifications', messages: 'Client Management' },
   'Agent':          { alerts: 'notifications', messages: 'leads' },
   'Team Leader':    { alerts: 'notifications', messages: 'leads' },
   'Office Manager': { alerts: 'notifications', messages: 'leads' },

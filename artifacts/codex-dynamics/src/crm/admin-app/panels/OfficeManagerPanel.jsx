@@ -125,7 +125,7 @@ function OfficeManagerPanel({ data, setData, currentUser, assignTeamLeader, crea
 
       <div className="crm-super-admin-header crm-role-panel-header" style={{ marginBottom: 20 }}>
         <div className="crm-super-admin-tabs">
-          {[['overview', 'Dashboard'], ['teams', 'Teams'], ['agents', 'Agents'], ['leads', 'Lead Distribution'], ['create', 'Create']].map(([key, label]) => (
+          {[['overview', 'Dashboard'], ['teams', 'Teams'], ['agents', 'Agents'], ['leads', 'Client Management'], ['create', 'Create']].map(([key, label]) => (
             <button key={key} className={`crm-super-admin-tab-btn ${omTab === key ? 'crm-active' : ''}`} onClick={() => setOmTab(key)}>{label}</button>
           ))}
         </div>
